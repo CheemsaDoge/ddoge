@@ -44,6 +44,12 @@ dependencies:
   file_picker: ^8.0.0
   shared_preferences: ^2.3.0
 
+  # 通知与小组件
+  flutter_local_notifications: ^18.0.1
+  home_widget: ^0.7.0
+  timezone: ^0.10.0
+  permission_handler: ^11.3.1
+
   # 图标
   cupertino_icons: ^1.0.8
 

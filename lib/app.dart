@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/notification/providers/notification_providers.dart';
 import 'features/schedule/providers/schedule_providers.dart';
 
 /// 应用根组件
@@ -13,6 +14,9 @@ class DDogeApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+
+    // 监听课程/学期变化，自动调度提醒 & 刷新小组件
+    ref.watch(reminderAutoScheduleProvider);
 
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {

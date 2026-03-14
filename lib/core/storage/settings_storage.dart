@@ -22,6 +22,7 @@ class SettingsStorage {
   static const _keyBuiltinWallpaper = 'builtin_wallpaper';
   static const _keyCustomBackgroundPath = 'custom_background_path';
   static const _keyBackgroundOpacity = 'background_opacity';
+  static const _keyReminderMinutes = 'reminder_minutes';
 
   // 背景类型
   BackgroundType getBackgroundType() {
@@ -62,5 +63,14 @@ class SettingsStorage {
 
   Future<void> setBackgroundOpacity(double opacity) async {
     await _prefs.setDouble(_keyBackgroundOpacity, opacity);
+  }
+
+  // 课前提醒分钟数（0=关闭）
+  int getReminderMinutes() {
+    return _prefs.getInt(_keyReminderMinutes) ?? 0;
+  }
+
+  Future<void> setReminderMinutes(int minutes) async {
+    await _prefs.setInt(_keyReminderMinutes, minutes);
   }
 }

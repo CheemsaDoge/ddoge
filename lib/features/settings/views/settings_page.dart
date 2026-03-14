@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
+import 'package:ddoge/features/notification/providers/notification_providers.dart';
 import 'package:ddoge/core/router/app_router.dart';
+import 'package:ddoge/data/services/notification_service.dart';
 
 import 'package:ddoge/shared/widgets/glass_container.dart';
 
@@ -21,6 +23,7 @@ class SettingsPage extends ConsumerWidget {
     final cardFontScale = ref.watch(cardFontScaleProvider);
     final showGrid = ref.watch(showGridLinesProvider);
     final showTimeLine = ref.watch(showTimeLineProvider);
+    final reminderMinutes = ref.watch(reminderMinutesProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -49,6 +52,50 @@ class SettingsPage extends ConsumerWidget {
                 subtitle: const Text('自定义每节课的上课时间和时长'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push('/settings/time-slots'),
+              ),
+            ],
+          ),
+
+          // 课前提醒
+          _SettingsSection(
+            title: '课前提醒',
+            children: [
+              ListTile(
+                leading: const Icon(Icons.notifications_outlined),
+                title: const Text('提醒时间'),
+                subtitle: Text(reminderMinutes == 0
+                    ? '已关闭'
+                    : '课前 $reminderMinutes 分钟提醒'),
+                trailing: SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 0, label: Text('关')),
+                    ButtonSegment(value: 5, label: Text('5m')),
+                    ButtonSegment(value: 15, label: Text('15m')),
+                    ButtonSegment(value: 30, label: Text('30m')),
+                  ],
+                  selected: {reminderMinutes},
+                  onSelectionChanged: (v) async {
+                    final minutes = v.first;
+                    if (minutes > 0) {
+                      final granted = await NotificationService.instance
+                          .requestPermission();
+                      if (!granted) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('请授予通知权限以启用课前提醒')),
+                          );
+                        }
+                        return;
+                      }
+                    }
+                    ref.read(reminderMinutesProvider.notifier).state = minutes;
+                    ref.read(settingsStorageProvider).setReminderMinutes(minutes);
+                  },
+                  style: ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
               ),
             ],
           ),
@@ -258,6 +305,17 @@ class SettingsPage extends ConsumerWidget {
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('导入功能将在后续版本实现')),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.widgets_outlined),
+                title: const Text('刷新桌面小组件'),
+                subtitle: const Text('手动更新桌面课表小组件'),
+                onTap: () {
+                  ref.invalidate(reminderAutoScheduleProvider);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('桌面小组件已刷新')),
                   );
                 },
               ),

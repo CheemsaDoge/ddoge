@@ -56,11 +56,6 @@ class _CourseCardState extends State<CourseCard>
   }
 
   void _handleTapDown(TapDownDetails _) => _controller.forward();
-  void _handleTapUp(TapUpDetails _) {
-    _controller.reverse();
-    widget.onTap?.call();
-  }
-
   void _handleTapCancel() => _controller.reverse();
 
   @override
