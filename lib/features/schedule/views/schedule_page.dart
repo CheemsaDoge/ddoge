@@ -1,13 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ddoge/core/constants/time_slots.dart';
-import 'package:ddoge/core/constants/wallpapers.dart';
 import 'package:ddoge/core/router/app_router.dart';
-import 'package:ddoge/core/storage/settings_storage.dart';
 import 'package:ddoge/core/utils/date_utils.dart' as app_date;
 import 'package:ddoge/data/database/app_database.dart';
 import '../providers/schedule_providers.dart';
@@ -16,6 +12,8 @@ import '../widgets/time_column.dart';
 import '../widgets/week_header.dart';
 import '../widgets/week_selector.dart';
 import '../widgets/current_time_line.dart';
+
+import 'package:ddoge/shared/widgets/glass_container.dart';
 
 /// 课程表周视图主页面
 class SchedulePage extends ConsumerStatefulWidget {
@@ -74,13 +72,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final cardFontScale = ref.watch(cardFontScaleProvider);
     final showGrid = ref.watch(showGridLinesProvider);
     final showTimeLine = ref.watch(showTimeLineProvider);
-    final bgType = ref.watch(backgroundTypeProvider);
-    final builtinIndex = ref.watch(builtinWallpaperProvider);
-    final customBgPath = ref.watch(customBackgroundPathProvider);
-    final bgOpacity = ref.watch(backgroundOpacityProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      appBar: GlassAppBar(
         title: semesterAsync.when(
           data: (semester) => Text(
             semester?.name ?? 'DDoge 课程表',
@@ -118,6 +114,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
           return Column(
             children: [
+              // 留出 AppBar 的空间（因为 extendBodyBehindAppBar: true）
+              SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
               // 周数选择器
               WeekSelector(
                 totalWeeks: totalWeeks,
@@ -128,80 +126,67 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 },
               ),
               const Divider(height: 1),
-              // 课程表网格（PageView 实现平滑滑动过渡）+ 背景独立于课表
+              // 课程表网格（PageView 实现平滑滑动过渡）
               Expanded(
-                child: Stack(
-                  children: [
-                    // 背景图层（固定，不随 PageView 滑动）
-                    if (bgType != BackgroundType.none)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: Opacity(
-                            opacity: bgOpacity,
-                            child: _buildStaticBackground(bgType, builtinIndex, customBgPath),
-                          ),
-                        ),
-                      ),
-                    // PageView 层
-                    PageView.builder(
-                      controller: _pageController,
-                      // 有格子选中时禁止 PageView 滑动，防止误触翻页导致变白
-                      physics: _selectedDay != null
-                          ? const NeverScrollableScrollPhysics()
-                          : null,
-                      itemCount: totalWeeks,
-                      onPageChanged: (index) {
-                        _isPageAnimating = true;
-                        ref.read(selectedWeekProvider.notifier).state = index + 1;
-                        // 切换页面时清除选中状态
-                        setState(() {
-                          _selectedDay = null;
-                          _selectedStartSlot = null;
-                          _selectedEndSlot = null;
-                        });
-                        Future.microtask(() => _isPageAnimating = false);
-                      },
-                      itemBuilder: (context, index) {
-                        final pageWeek = index + 1;
-                        // 按周过滤课程
-                        final weekCourses = coursesList.where((course) {
-                          return app_date.DateUtils.isCourseActiveInWeek(
-                            course.startWeek,
-                            course.endWeek,
-                            course.weekType,
-                            pageWeek,
-                          );
-                        }).toList();
+                child: PageView.builder(
+                  controller: _pageController,
+                  // 有格子选中时禁止 PageView 滑动，防止误触翻页导致变白
+                  physics: _selectedDay != null
+                      ? const NeverScrollableScrollPhysics()
+                      : null,
+                  itemCount: totalWeeks,
+                  onPageChanged: (index) {
+                    _isPageAnimating = true;
+                    ref.read(selectedWeekProvider.notifier).state = index + 1;
+                    // 切换页面时清除选中状态
+                    setState(() {
+                      _selectedDay = null;
+                      _selectedStartSlot = null;
+                      _selectedEndSlot = null;
+                    });
+                    Future.microtask(() => _isPageAnimating = false);
+                  },
+                  itemBuilder: (context, index) {
+                    final pageWeek = index + 1;
+                    // 按周过滤课程
+                    final weekCourses = coursesList.where((course) {
+                      return app_date.DateUtils.isCourseActiveInWeek(
+                        course.startWeek,
+                        course.endWeek,
+                        course.weekType,
+                        pageWeek,
+                      );
+                    }).toList();
 
-                        return _ScheduleGrid(
-                          courses: weekCourses,
-                          timeSlots: timeSlots,
-                          weekDates: app_date.DateUtils.datesForWeek(
-                            semester.startDate,
-                            pageWeek,
-                          ),
-                          selectedWeek: pageWeek,
-                          currentWeek: currentWeek,
-                          autoFitHeight: autoFit,
-                          fixedSlotHeight: fixedSlotHeight,
-                          cardBorderRadius: cardRadius,
-                          cardOpacity: cardOpacity,
-                          cardFontScale: cardFontScale,
-                          showGridLines: showGrid,
-                          showTimeLine: showTimeLine,
-                          selectedDay: pageWeek == selectedWeek ? _selectedDay : null,
-                          selectedStartSlot: pageWeek == selectedWeek ? _selectedStartSlot : null,
-                          selectedEndSlot: pageWeek == selectedWeek ? _selectedEndSlot : null,
-                          onSlotTap: _onSlotTap,
-                          gridKey: pageWeek == selectedWeek ? _gridKey : null,
-                          onHandleDragUpdate: _onHandleDragUpdate,
-                          onHandleDragEnd: _onHandleDragEnd,
-                        );
-                      },
-                    ),
-                  ],
+                    return _ScheduleGrid(
+                      courses: weekCourses,
+                      timeSlots: timeSlots,
+                      weekDates: app_date.DateUtils.datesForWeek(
+                        semester.startDate,
+                        pageWeek,
+                      ),
+                      selectedWeek: pageWeek,
+                      currentWeek: currentWeek,
+                      autoFitHeight: autoFit,
+                      fixedSlotHeight: fixedSlotHeight,
+                      cardBorderRadius: cardRadius,
+                      cardOpacity: cardOpacity,
+                      cardFontScale: cardFontScale,
+                      showGridLines: showGrid,
+                      showTimeLine: showTimeLine,
+                      selectedDay: pageWeek == selectedWeek ? _selectedDay : null,
+                      selectedStartSlot: pageWeek == selectedWeek ? _selectedStartSlot : null,
+                      selectedEndSlot: pageWeek == selectedWeek ? _selectedEndSlot : null,
+                      onSlotTap: _onSlotTap,
+                      gridKey: pageWeek == selectedWeek ? _gridKey : null,
+                      onHandleDragUpdate: _onHandleDragUpdate,
+                      onHandleDragEnd: _onHandleDragEnd,
+                    );
+                  },
                 ),
               ),
+              // 留出底部导航栏的空间（因为 extendBody: true 在 shell 中设置了）
+              SizedBox(height: MediaQuery.of(context).padding.bottom + kBottomNavigationBarHeight),
             ],
           );
         },
@@ -281,29 +266,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       'slot': startSlot,
       'endSlot': endSlot,
     });
-  }
-
-  /// 构建固定背景层（独立于 PageView，不随滑动移动）
-  Widget _buildStaticBackground(
-    BackgroundType type,
-    int builtinIndex,
-    String? customPath,
-  ) {
-    if (type == BackgroundType.builtin &&
-        builtinIndex < BuiltinWallpapers.all.length) {
-      return Container(
-        decoration: BoxDecoration(
-          gradient: BuiltinWallpapers.all[builtinIndex].toGradient(),
-        ),
-      );
-    } else if (type == BackgroundType.custom && customPath != null) {
-      return Image.file(
-        File(customPath),
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => const SizedBox.shrink(),
-      );
-    }
-    return const SizedBox.shrink();
   }
 
   /// 空状态引导页

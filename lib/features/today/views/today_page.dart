@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ddoge/data/database/app_database.dart';
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
 
+import 'package:ddoge/shared/widgets/glass_container.dart';
+
 /// 今日课程页面
 ///
 /// 纵向时间轴展示当天课程，高亮当前/下一节课
@@ -18,7 +20,9 @@ class TodayPage extends ConsumerWidget {
     final coursesAsync = ref.watch(coursesForSelectedWeekProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      appBar: GlassAppBar(
         title: Text(
           _todayTitle(),
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -53,7 +57,16 @@ class TodayPage extends ConsumerWidget {
             return _buildFreeDayView(theme);
           }
 
-          return _buildCourseTimeline(theme, todayCourses, timeSlots);
+          return Column(
+            children: [
+              SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
+              Expanded(
+                child: _buildCourseTimeline(theme, todayCourses, timeSlots),
+              ),
+              // 留出底部导航栏空间
+              SizedBox(height: MediaQuery.of(context).padding.bottom + kBottomNavigationBarHeight),
+            ],
+          );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('加载失败: $e')),

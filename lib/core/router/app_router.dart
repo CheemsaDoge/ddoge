@@ -9,6 +9,8 @@ import 'package:ddoge/features/settings/views/settings_page.dart';
 import 'package:ddoge/features/settings/views/time_slot_settings_page.dart';
 import 'package:ddoge/features/settings/views/semester_settings_page.dart';
 import 'package:ddoge/features/settings/views/background_settings_page.dart';
+import 'package:ddoge/shared/widgets/glass_container.dart';
+import 'package:ddoge/shared/widgets/background_layer.dart';
 
 /// 路由路径常量
 class AppRoutes {
@@ -152,32 +154,44 @@ class _MainShellScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) {
-          navigationShell.goBranch(
-            index,
-            initialLocation: index == navigationShell.currentIndex,
-          );
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.calendar_view_week_outlined),
-            selectedIcon: Icon(Icons.calendar_view_week),
-            label: '课表',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.today_outlined),
-            selectedIcon: Icon(Icons.today),
-            label: '今日',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: '设置',
-          ),
+      extendBody: true, // 使 body 延伸到 NavigationBar 下方
+      body: Stack(
+        children: [
+          const BackgroundLayer(),
+          navigationShell,
         ],
+      ),
+      bottomNavigationBar: GlassContainer(
+        blur: 15.0,
+        opacity: 0.5,
+        child: NavigationBar(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          selectedIndex: navigationShell.currentIndex,
+          onDestinationSelected: (index) {
+            navigationShell.goBranch(
+              index,
+              initialLocation: index == navigationShell.currentIndex,
+            );
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.calendar_view_week_outlined),
+              selectedIcon: Icon(Icons.calendar_view_week),
+              label: '课表',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.today_outlined),
+              selectedIcon: Icon(Icons.today),
+              label: '今日',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.settings_outlined),
+              selectedIcon: Icon(Icons.settings),
+              label: '设置',
+            ),
+          ],
+        ),
       ),
     );
   }

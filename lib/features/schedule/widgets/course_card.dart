@@ -70,83 +70,81 @@ class _CourseCardState extends State<CourseCard>
     final textColor = _contrastTextColor(color);
     final fs = widget.fontScale;
 
-    return GestureDetector(
-      onTapDown: _handleTapDown,
-      onTapUp: _handleTapUp,
-      onTapCancel: _handleTapCancel,
-      onLongPress: widget.onLongPress,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _scaleAnimation.value,
-            child: child,
-          );
-        },
-        child: Container(
-          margin: const EdgeInsets.all(1.5),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: widget.opacity),
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scaleAnimation.value,
+          child: child,
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.all(1.5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: widget.opacity),
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.2),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTapDown: _handleTapDown,
+            onTap: _handleTapUp,
+            onTapCancel: _handleTapCancel,
+            onLongPress: widget.onLongPress,
             borderRadius: BorderRadius.circular(widget.borderRadius),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.3),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                widget.course.name,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 11 * fs,
-                  fontWeight: FontWeight.w600,
-                  height: 1.2,
-                ),
-                maxLines: widget.slotCount > 1 ? 3 : 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-              ),
-              if (widget.course.classroom.isNotEmpty &&
-                  widget.slotCount > 1) ...[
-                const SizedBox(height: 2),
-                Text(
-                  '@${widget.course.classroom}',
-                  style: TextStyle(
-                    color: textColor.withValues(alpha: 0.85),
-                    fontSize: 9 * fs,
-                    height: 1.2,
+            splashColor: textColor.withValues(alpha: 0.2),
+            highlightColor: textColor.withValues(alpha: 0.1),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    widget.course.name,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 11 * fs,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                    maxLines: widget.slotCount > 1 ? 4 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              if (widget.course.teacher.isNotEmpty &&
-                  widget.slotCount > 2) ...[
-                const SizedBox(height: 1),
-                Text(
-                  widget.course.teacher,
-                  style: TextStyle(
-                    color: textColor.withValues(alpha: 0.7),
-                    fontSize: 8 * fs,
-                    height: 1.2,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ],
+                  if (widget.course.classroom.isNotEmpty &&
+                      widget.slotCount > 1) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.course.classroom,
+                      style: TextStyle(
+                        color: textColor.withValues(alpha: 0.85),
+                        fontSize: 9 * fs,
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
+  }
+
+  void _handleTapUp() {
+    _controller.reverse();
+    widget.onTap?.call();
   }
 
   Color _contrastTextColor(Color bg) {

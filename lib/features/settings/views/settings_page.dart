@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
 
+import 'package:ddoge/shared/widgets/glass_container.dart';
+
 /// 设置页面
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -20,8 +22,14 @@ class SettingsPage extends ConsumerWidget {
     final showTimeLine = ref.watch(showTimeLineProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      appBar: const GlassAppBar(title: Text('设置')),
       body: ListView(
+        padding: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top + kToolbarHeight,
+          bottom: MediaQuery.of(context).padding.bottom + kBottomNavigationBarHeight,
+        ),
         children: [
           // 学期管理
           _SettingsSection(
