@@ -192,7 +192,7 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('DDoge 课程表'),
-                subtitle: const Text('版本 1.1.3'),
+                subtitle: const Text('版本 1.1.4'),
               ),
             ],
           ),
@@ -204,11 +204,19 @@ class SettingsPage extends ConsumerWidget {
   /// 导出课程数据为 JSON
   Future<void> _exportData(BuildContext context, WidgetRef ref) async {
     try {
+      final exportOptions = await _showExportOptionsDialog(context);
+      if (exportOptions == null) return;
+
       final semesterDao = ref.read(semesterDaoProvider);
       final courseDao = ref.read(courseDaoProvider);
       final timeSlotDao = ref.read(timeSlotDaoProvider);
 
-      final semesters = await semesterDao.getAllSemesters();
+      final semesters =
+          exportOptions.includeSemesters ||
+              exportOptions.includeTimeSlots ||
+              exportOptions.includeCourses
+          ? await semesterDao.getAllSemesters()
+          : const <Semester>[];
 
       // Collect all courses and time slots
       final List<Map<String, dynamic>> semesterList = [];
@@ -217,47 +225,69 @@ class SettingsPage extends ConsumerWidget {
       final settingsStorage = ref.read(settingsStorageProvider);
 
       for (final sem in semesters) {
-        semesterList.add({
-          'id': sem.id,
-          'name': sem.name,
-          'startDate': sem.startDate.toIso8601String(),
-          'totalWeeks': sem.totalWeeks,
-          'isCurrent': sem.isCurrent,
-        });
-
-        final courses = await courseDao.getCoursesForSemester(sem.id);
-        for (final c in courses) {
-          courseList.add({
-            'id': c.id,
-            'name': c.name,
-            'teacher': c.teacher,
-            'classroom': c.classroom,
-            'dayOfWeek': c.dayOfWeek,
-            'startSlot': c.startSlot,
-            'endSlot': c.endSlot,
-            'startWeek': c.startWeek,
-            'endWeek': c.endWeek,
-            'weekType': c.weekType,
-            'colorIndex': c.colorIndex,
-            'note': c.note,
-            'semesterId': c.semesterId,
+        if (exportOptions.includeSemesters) {
+          semesterList.add({
+            'id': sem.id,
+            'name': sem.name,
+            'startDate': sem.startDate.toIso8601String(),
+            'totalWeeks': sem.totalWeeks,
+            'isCurrent': sem.isCurrent,
           });
         }
 
-        final slots = await timeSlotDao.getTimeSlotsForSemester(sem.id);
-        for (final s in slots) {
-          timeSlotList.add({
-            'index': s.index,
-            'startHour': s.startHour,
-            'startMinute': s.startMinute,
-            'endHour': s.endHour,
-            'endMinute': s.endMinute,
-            'semesterId': s.semesterId,
-          });
+        if (exportOptions.includeCourses) {
+          final courses = await courseDao.getCoursesForSemester(sem.id);
+          for (final c in courses) {
+            courseList.add({
+              'id': c.id,
+              'name': c.name,
+              'teacher': c.teacher,
+              'classroom': c.classroom,
+              'dayOfWeek': c.dayOfWeek,
+              'startSlot': c.startSlot,
+              'endSlot': c.endSlot,
+              'startWeek': c.startWeek,
+              'endWeek': c.endWeek,
+              'weekType': c.weekType,
+              'colorIndex': c.colorIndex,
+              'note': c.note,
+              'semesterId': c.semesterId,
+            });
+          }
+        }
+
+        if (exportOptions.includeTimeSlots) {
+          final slots = await timeSlotDao.getTimeSlotsForSemester(sem.id);
+          for (final s in slots) {
+            timeSlotList.add({
+              'index': s.index,
+              'startHour': s.startHour,
+              'startMinute': s.startMinute,
+              'endHour': s.endHour,
+              'endMinute': s.endMinute,
+              'semesterId': s.semesterId,
+            });
+          }
         }
       }
 
-      final settingsData = _buildSettingsExportData(settingsStorage);
+      final settingsData = _buildSettingsSubsetExportData(
+        settingsStorage,
+        includeReminderSettings: exportOptions.includeReminderSettings,
+        includeDisplaySettings: exportOptions.includeDisplaySettings,
+      );
+
+      if (semesterList.isEmpty &&
+          courseList.isEmpty &&
+          timeSlotList.isEmpty &&
+          settingsData.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('请至少选择一项导出内容')));
+        }
+        return;
+      }
 
       final exportData = {
         'version': 2,
@@ -420,26 +450,39 @@ class SettingsPage extends ConsumerWidget {
     }
   }
 
-  Map<String, dynamic> _buildSettingsExportData(SettingsStorage storage) {
-    return {
-      'themeMode': storage.getThemeMode(),
-      'reminderMinutes': storage.getReminderMinutes(),
-      'autoFitHeight': storage.getAutoFitHeight(),
-      'fixedSlotHeight': storage.getFixedSlotHeight(),
-      'cardBorderRadius': storage.getCardBorderRadius(),
-      'cardOpacity': storage.getCardOpacity(),
-      'cardFontScale': storage.getCardFontScale(),
-      'showGridLines': storage.getShowGridLines(),
-      'showTimeLine': storage.getShowTimeLine(),
-      'gridLineColorIndex': storage.getGridLineColorIndex(),
-      'gridLineWidth': storage.getGridLineWidth(),
-      'gridLineOpacity': storage.getGridLineOpacity(),
-      'gridLineDashed': storage.getGridLineDashed(),
-      'backgroundType': storage.getBackgroundType().index,
-      'builtinWallpaper': storage.getBuiltinWallpaper(),
-      'customBackgroundPath': storage.getCustomBackgroundPath(),
-      'backgroundOpacity': storage.getBackgroundOpacity(),
-    };
+  Map<String, dynamic> _buildSettingsSubsetExportData(
+    SettingsStorage storage, {
+    required bool includeReminderSettings,
+    required bool includeDisplaySettings,
+  }) {
+    final data = <String, dynamic>{};
+
+    if (includeReminderSettings) {
+      data['reminderMinutes'] = storage.getReminderMinutes();
+    }
+
+    if (includeDisplaySettings) {
+      data.addAll({
+        'themeMode': storage.getThemeMode(),
+        'autoFitHeight': storage.getAutoFitHeight(),
+        'fixedSlotHeight': storage.getFixedSlotHeight(),
+        'cardBorderRadius': storage.getCardBorderRadius(),
+        'cardOpacity': storage.getCardOpacity(),
+        'cardFontScale': storage.getCardFontScale(),
+        'showGridLines': storage.getShowGridLines(),
+        'showTimeLine': storage.getShowTimeLine(),
+        'gridLineColorIndex': storage.getGridLineColorIndex(),
+        'gridLineWidth': storage.getGridLineWidth(),
+        'gridLineOpacity': storage.getGridLineOpacity(),
+        'gridLineDashed': storage.getGridLineDashed(),
+        'backgroundType': storage.getBackgroundType().index,
+        'builtinWallpaper': storage.getBuiltinWallpaper(),
+        'customBackgroundPath': storage.getCustomBackgroundPath(),
+        'backgroundOpacity': storage.getBackgroundOpacity(),
+      });
+    }
+
+    return data;
   }
 
   Future<void> _importSettings(
@@ -560,6 +603,13 @@ class SettingsPage extends ConsumerWidget {
       await storage.setBackgroundOpacity(backgroundOpacity);
     }
   }
+
+  Future<_ExportOptions?> _showExportOptionsDialog(BuildContext context) {
+    return showDialog<_ExportOptions>(
+      context: context,
+      builder: (context) => const _ExportOptionsDialog(),
+    );
+  }
 }
 
 /// 设置分区组件
@@ -625,6 +675,117 @@ class _CompactSelect<T> extends StatelessWidget {
           icon: const Icon(Icons.keyboard_arrow_down, size: 18),
         ),
       ),
+    );
+  }
+}
+
+class _ExportOptions {
+  const _ExportOptions({
+    required this.includeSemesters,
+    required this.includeTimeSlots,
+    required this.includeReminderSettings,
+    required this.includeDisplaySettings,
+    required this.includeCourses,
+  });
+
+  final bool includeSemesters;
+  final bool includeTimeSlots;
+  final bool includeReminderSettings;
+  final bool includeDisplaySettings;
+  final bool includeCourses;
+}
+
+class _ExportOptionsDialog extends StatefulWidget {
+  const _ExportOptionsDialog();
+
+  @override
+  State<_ExportOptionsDialog> createState() => _ExportOptionsDialogState();
+}
+
+class _ExportOptionsDialogState extends State<_ExportOptionsDialog> {
+  bool includeSemesters = true;
+  bool includeTimeSlots = true;
+  bool includeReminderSettings = true;
+  bool includeDisplaySettings = true;
+  bool includeCourses = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('选择导出内容'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CheckboxListTile(
+              value: includeSemesters,
+              onChanged: (value) {
+                setState(() => includeSemesters = value ?? false);
+              },
+              title: const Text('学期'),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
+            CheckboxListTile(
+              value: includeTimeSlots,
+              onChanged: (value) {
+                setState(() => includeTimeSlots = value ?? false);
+              },
+              title: const Text('节次'),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
+            CheckboxListTile(
+              value: includeReminderSettings,
+              onChanged: (value) {
+                setState(() => includeReminderSettings = value ?? false);
+              },
+              title: const Text('提醒'),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
+            CheckboxListTile(
+              value: includeDisplaySettings,
+              onChanged: (value) {
+                setState(() => includeDisplaySettings = value ?? false);
+              },
+              title: const Text('课表显示样式'),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
+            CheckboxListTile(
+              value: includeCourses,
+              onChanged: (value) {
+                setState(() => includeCourses = value ?? false);
+              },
+              title: const Text('课程信息'),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.pop(
+              context,
+              _ExportOptions(
+                includeSemesters: includeSemesters,
+                includeTimeSlots: includeTimeSlots,
+                includeReminderSettings: includeReminderSettings,
+                includeDisplaySettings: includeDisplaySettings,
+                includeCourses: includeCourses,
+              ),
+            );
+          },
+          child: const Text('导出'),
+        ),
+      ],
     );
   }
 }

@@ -1,7 +1,7 @@
 name: ddoge
 description: "DDoge 课程表 — 精美现代的多平台课程表应用"
 publish_to: 'none'
-version: 1.1.3+4
+version: 1.1.4+5
 
 environment:
   sdk: ^3.11.1

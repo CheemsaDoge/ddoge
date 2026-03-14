@@ -286,14 +286,24 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                 : InAppWebView(
                     initialSettings: InAppWebViewSettings(
                       javaScriptEnabled: true,
+                      javaScriptCanOpenWindowsAutomatically: true,
                       cacheMode: CacheMode.LOAD_DEFAULT,
+                      cacheEnabled: true,
                       domStorageEnabled: true,
                       databaseEnabled: true,
                       useOnLoadResource: false,
+                      useShouldOverrideUrlLoading: true,
                       mixedContentMode:
                           MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
                       allowContentAccess: true,
                       allowFileAccess: true,
+                      loadsImagesAutomatically: true,
+                      thirdPartyCookiesEnabled: true,
+                      supportMultipleWindows: true,
+                      useHybridComposition: true,
+                      sharedCookiesEnabled: true,
+                      mediaPlaybackRequiresUserGesture: false,
+                      textZoom: 100,
                       supportZoom: true,
                       builtInZoomControls: true,
                       displayZoomControls: false,
@@ -307,6 +317,29 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                       if (_didPrepareFreshSession) return;
                       _didPrepareFreshSession = true;
                       await _prepareFreshBrowserSession(controller);
+                    },
+                    shouldOverrideUrlLoading:
+                        (controller, navigationAction) async {
+                          final uri = navigationAction.request.url;
+                          if (uri == null) {
+                            return NavigationActionPolicy.ALLOW;
+                          }
+
+                          final scheme = uri.scheme.toLowerCase();
+                          if (scheme == 'http' || scheme == 'https') {
+                            return NavigationActionPolicy.ALLOW;
+                          }
+
+                          return NavigationActionPolicy.CANCEL;
+                        },
+                    onCreateWindow: (controller, createWindowAction) async {
+                      final popupUrl = createWindowAction.request.url;
+                      if (popupUrl != null) {
+                        await controller.loadUrl(
+                          urlRequest: URLRequest(url: popupUrl),
+                        );
+                      }
+                      return false;
                     },
                     onLoadStart: (controller, url) {
                       setState(() {
@@ -350,6 +383,9 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                           });
                         },
                     onReceivedError: (controller, request, error) {
+                      setState(() => _isLoading = false);
+                    },
+                    onReceivedHttpError: (controller, request, response) {
                       setState(() => _isLoading = false);
                     },
                   ),
