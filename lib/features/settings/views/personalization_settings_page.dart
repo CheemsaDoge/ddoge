@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ddoge/core/router/app_router.dart';
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
 
 /// 个性化设置页面
@@ -37,6 +38,10 @@ class PersonalizationSettingsPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('个性化')),
       body: ListView(
+        padding: EdgeInsets.only(
+          bottom:
+              MediaQuery.of(context).padding.bottom + kCustomNavBarHeight + 16,
+        ),
         children: [
           // 课表显示
           _Section(

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'package:ddoge/core/router/app_router.dart';
 import 'package:ddoge/core/constants/wallpapers.dart';
 import 'package:ddoge/core/storage/settings_storage.dart';
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
@@ -25,16 +26,24 @@ class BackgroundSettingsPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('课表背景')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(context).padding.bottom + kCustomNavBarHeight + 16,
+        ),
         children: [
           // 预览区域
           _buildPreview(context, bgType, builtinIndex, customPath, opacity),
           const SizedBox(height: 24),
 
           // 透明度调节
-          Text('背景透明度', style: theme.textTheme.titleSmall?.copyWith(
-            color: theme.colorScheme.primary,
-          )),
+          Text(
+            '背景透明度',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -58,9 +67,12 @@ class BackgroundSettingsPage extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // 无背景选项
-          Text('背景选择', style: theme.textTheme.titleSmall?.copyWith(
-            color: theme.colorScheme.primary,
-          )),
+          Text(
+            '背景选择',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
           const SizedBox(height: 8),
           _buildOptionTile(
             context,
@@ -85,9 +97,12 @@ class BackgroundSettingsPage extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // 内置渐变壁纸网格
-          Text('内置壁纸', style: theme.textTheme.titleSmall?.copyWith(
-            color: theme.colorScheme.primary,
-          )),
+          Text(
+            '内置壁纸',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
           const SizedBox(height: 8),
           GridView.builder(
             shrinkWrap: true,
@@ -101,8 +116,8 @@ class BackgroundSettingsPage extends ConsumerWidget {
             itemCount: BuiltinWallpapers.all.length,
             itemBuilder: (context, index) {
               final wallpaper = BuiltinWallpapers.all[index];
-              final isSelected = bgType == BackgroundType.builtin &&
-                  builtinIndex == index;
+              final isSelected =
+                  bgType == BackgroundType.builtin && builtinIndex == index;
 
               return GestureDetector(
                 onTap: () => _selectBuiltin(ref, index),
@@ -112,15 +127,14 @@ class BackgroundSettingsPage extends ConsumerWidget {
                     gradient: wallpaper.toGradient(),
                     borderRadius: BorderRadius.circular(12),
                     border: isSelected
-                        ? Border.all(
-                            color: theme.colorScheme.primary,
-                            width: 3,
-                          )
+                        ? Border.all(color: theme.colorScheme.primary, width: 3)
                         : null,
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.3,
+                              ),
                               blurRadius: 8,
                               spreadRadius: 1,
                             ),
@@ -178,9 +192,7 @@ class BackgroundSettingsPage extends ConsumerWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant,
-        ),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -223,10 +235,7 @@ class BackgroundSettingsPage extends ConsumerWidget {
                 color: theme.colorScheme.surface.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
-                '预览效果',
-                style: theme.textTheme.labelSmall,
-              ),
+              child: Text('预览效果', style: theme.textTheme.labelSmall),
             ),
           ),
         ],
@@ -255,10 +264,12 @@ class BackgroundSettingsPage extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              Icon(icon,
-                  color: selected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant),
+              Icon(
+                icon,
+                color: selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -278,8 +289,11 @@ class BackgroundSettingsPage extends ConsumerWidget {
                 ),
               ),
               if (selected)
-                Icon(Icons.check_circle,
-                    color: theme.colorScheme.primary, size: 20),
+                Icon(
+                  Icons.check_circle,
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
             ],
           ),
         ),
@@ -351,10 +365,18 @@ class _PreviewGridPainter extends CustomPainter {
     final cellH = size.height / rows;
 
     for (int i = 0; i <= cols; i++) {
-      canvas.drawLine(Offset(i * cellW, 0), Offset(i * cellW, size.height), paint);
+      canvas.drawLine(
+        Offset(i * cellW, 0),
+        Offset(i * cellW, size.height),
+        paint,
+      );
     }
     for (int i = 0; i <= rows; i++) {
-      canvas.drawLine(Offset(0, i * cellH), Offset(size.width, i * cellH), paint);
+      canvas.drawLine(
+        Offset(0, i * cellH),
+        Offset(size.width, i * cellH),
+        paint,
+      );
     }
   }
 

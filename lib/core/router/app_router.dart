@@ -111,13 +111,24 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
+      path: '/course/edit/:id',
+      parentNavigatorKey: rootNavigatorKey,
+      pageBuilder: (context, state) {
+        final courseId = state.pathParameters['id']!;
+        return CustomTransitionPage(
+          child: CourseEditPage(courseId: courseId),
+          transitionsBuilder: _slideUpTransition,
+        );
+      },
+    ),
+    GoRoute(
       path: '/import/:system',
       parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final systemName = state.pathParameters['system']!;
         final system = SchoolSystem.values.firstWhere(
-          (e) => e.name.toLowerCase().contains(systemName.toLowerCase()),
-          orElse: () => SchoolSystem.uestc,
+          (e) => e.name.toLowerCase() == systemName.toLowerCase(),
+          orElse: () => SchoolSystem.generic,
         );
         return ImportPage(system: system);
       },

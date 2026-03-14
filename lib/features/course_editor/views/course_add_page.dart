@@ -73,17 +73,17 @@ class _CourseAddPageState extends ConsumerState<CourseAddPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('添加课程'),
-        actions: [
-          TextButton(
-            onPressed: _saveCourse,
-            child: const Text('保存'),
-          ),
-        ],
+        actions: [TextButton(onPressed: _saveCourse, child: const Text('保存'))],
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.of(context).padding.bottom,
+          ),
           children: [
             // 课程名称
             TextFormField(
@@ -147,10 +147,8 @@ class _CourseAddPageState extends ConsumerState<CourseAddPage> {
               value: _startSlot,
               items: List.generate(
                 TimeSlotConstants.maxSlotsPerDay,
-                (i) => DropdownMenuItem(
-                  value: i + 1,
-                  child: Text('第${i + 1}节'),
-                ),
+                (i) =>
+                    DropdownMenuItem(value: i + 1, child: Text('第${i + 1}节')),
               ),
               onChanged: (v) {
                 setState(() {
@@ -310,7 +308,7 @@ class _CourseAddPageState extends ConsumerState<CourseAddPage> {
                       BoxShadow(
                         color: color.withValues(alpha: 0.4),
                         blurRadius: 8,
-                      )
+                      ),
                     ]
                   : null,
             ),
@@ -328,9 +326,9 @@ class _CourseAddPageState extends ConsumerState<CourseAddPage> {
 
     final semester = ref.read(currentSemesterProvider).valueOrNull;
     if (semester == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先设置学期信息')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先设置学期信息')));
       return;
     }
 
@@ -374,21 +372,23 @@ class _CourseAddPageState extends ConsumerState<CourseAddPage> {
     }
 
     final courseDao = ref.read(courseDaoProvider);
-    await courseDao.upsertCourse(CoursesCompanion.insert(
-      id: const Uuid().v4(),
-      name: _nameController.text.trim(),
-      teacher: Value(_teacherController.text.trim()),
-      classroom: Value(_classroomController.text.trim()),
-      dayOfWeek: _dayOfWeek,
-      startSlot: _startSlot,
-      endSlot: _endSlot,
-      startWeek: _startWeek,
-      endWeek: _endWeek,
-      weekType: Value(_weekType),
-      colorIndex: Value(_colorIndex),
-      note: Value(_noteController.text.trim()),
-      semesterId: semester.id,
-    ));
+    await courseDao.upsertCourse(
+      CoursesCompanion.insert(
+        id: const Uuid().v4(),
+        name: _nameController.text.trim(),
+        teacher: Value(_teacherController.text.trim()),
+        classroom: Value(_classroomController.text.trim()),
+        dayOfWeek: _dayOfWeek,
+        startSlot: _startSlot,
+        endSlot: _endSlot,
+        startWeek: _startWeek,
+        endWeek: _endWeek,
+        weekType: Value(_weekType),
+        colorIndex: Value(_colorIndex),
+        note: Value(_noteController.text.trim()),
+        semesterId: semester.id,
+      ),
+    );
 
     if (mounted) {
       context.pop();

@@ -240,21 +240,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         error: (error, _) => Center(child: Text('加载失败: $error')),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: _selectedDay != null
+      floatingActionButton: _selectedDay == null
           ? Padding(
-              padding: EdgeInsets.only(
-                bottom:
-                    MediaQuery.of(context).padding.bottom +
-                    kCustomNavBarHeight +
-                    8,
-              ),
-              child: FloatingActionButton.extended(
-                onPressed: _addCourseFromSelection,
-                icon: const Icon(Icons.add),
-                label: const Text('添加课程'),
-              ),
-            )
-          : Padding(
               padding: EdgeInsets.only(
                 bottom:
                     MediaQuery.of(context).padding.bottom +
@@ -265,7 +252,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 onPressed: () => context.push(AppRoutes.courseAdd),
                 child: const Icon(Icons.add),
               ),
-            ),
+            )
+          : null,
     );
   }
 
@@ -465,8 +453,15 @@ class _ScheduleGrid extends StatelessWidget {
         // 自适应高度：网格填满可用空间；固定高度：使用设置值
         final headerHeight = 36.0; // WeekHeader 高度
         final dividerHeight = 1.0;
+        final bottomOverlayHeight =
+            MediaQuery.of(context).padding.bottom + kCustomNavBarHeight;
         final availableHeight =
-            constraints.maxHeight - headerHeight - dividerHeight;
+            (constraints.maxHeight -
+                    headerHeight -
+                    dividerHeight -
+                    (autoFitHeight ? bottomOverlayHeight : 0))
+                .clamp(0.0, double.infinity)
+                .toDouble();
         final slotHeight = autoFitHeight
             ? (availableHeight / slotCount).clamp(30.0, 100.0)
             : fixedSlotHeight;
@@ -488,14 +483,17 @@ class _ScheduleGrid extends StatelessWidget {
             // 网格
             Expanded(
               child: autoFitHeight
-                  ? _buildGrid(
-                      context,
-                      slotCount,
-                      slotHeight,
-                      dayWidth,
-                      timeColumnWidth,
-                      todayIndex,
-                      gridHeight,
+                  ? Align(
+                      alignment: Alignment.topCenter,
+                      child: _buildGrid(
+                        context,
+                        slotCount,
+                        slotHeight,
+                        dayWidth,
+                        timeColumnWidth,
+                        todayIndex,
+                        gridHeight,
+                      ),
                     )
                   : SingleChildScrollView(
                       padding: EdgeInsets.only(
@@ -656,27 +654,12 @@ class _ScheduleGrid extends StatelessWidget {
                 width: 1.5,
               ),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.add_circle_outline,
-                  size: 18,
-                  color: theme.colorScheme.primary.withValues(alpha: 0.7),
-                ),
-                if (height > slotHeight * 1.5)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      '第$startSlot${endSlot > startSlot ? '-$endSlot' : ''}节',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: theme.colorScheme.primary.withValues(alpha: 0.7),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
+            child: Center(
+              child: Icon(
+                Icons.add_circle_outline,
+                size: 18,
+                color: theme.colorScheme.primary.withValues(alpha: 0.7),
+              ),
             ),
           ),
         ),
@@ -686,9 +669,10 @@ class _ScheduleGrid extends StatelessWidget {
     // 右侧拖拽手柄（可交互，放在格子外的右方）
     final handleWidth = 22.0;
     final handleTop = endSlot * slotHeight - slotHeight; // 手柄放在选区最后一格
+    final handleLeft = selectedDay == 7 ? left - handleWidth : left + dayWidth;
     widgets.add(
       Positioned(
-        left: left + dayWidth,
+        left: handleLeft,
         top: handleTop,
         width: handleWidth,
         height: slotHeight,
@@ -805,8 +789,17 @@ class _ScheduleGrid extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
       builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        padding: EdgeInsets.fromLTRB(
+          24,
+          0,
+          24,
+          24 + MediaQuery.of(context).padding.bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

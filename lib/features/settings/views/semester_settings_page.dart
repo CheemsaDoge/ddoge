@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:ddoge/core/router/app_router.dart';
 import 'package:ddoge/data/database/app_database.dart';
 import 'package:ddoge/features/schedule/providers/database_providers.dart';
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
@@ -40,41 +41,48 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
       appBar: AppBar(title: const Text('学期管理')),
       body: semestersAsync.when(
         data: (semesters) => ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            MediaQuery.of(context).padding.bottom + kCustomNavBarHeight + 16,
+          ),
           children: [
             // 已有学期列表
             if (semesters.isNotEmpty) ...[
               Text('已有学期', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
-              ...semesters.map((s) => Card(
-                    color: s.isCurrent
-                        ? theme.colorScheme.primaryContainer
-                        : null,
-                    child: ListTile(
-                      title: Text(s.name),
-                      subtitle: Text(
-                        '开学日期：${s.startDate.year}-${s.startDate.month.toString().padLeft(2, '0')}-${s.startDate.day.toString().padLeft(2, '0')}  共${s.totalWeeks}周',
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (!s.isCurrent)
-                            TextButton(
-                              onPressed: () => _setCurrentSemester(s.id),
-                              child: const Text('设为当前'),
-                            ),
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, size: 20),
-                            onPressed: () => _startEdit(s),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 20),
-                            onPressed: () => _deleteSemester(s.id, s.name),
-                          ),
-                        ],
-                      ),
+              ...semesters.map(
+                (s) => Card(
+                  color: s.isCurrent
+                      ? theme.colorScheme.primaryContainer
+                      : null,
+                  child: ListTile(
+                    title: Text(s.name),
+                    subtitle: Text(
+                      '开学日期：${s.startDate.year}-${s.startDate.month.toString().padLeft(2, '0')}-${s.startDate.day.toString().padLeft(2, '0')}  共${s.totalWeeks}周',
                     ),
-                  )),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!s.isCurrent)
+                          TextButton(
+                            onPressed: () => _setCurrentSemester(s.id),
+                            child: const Text('设为当前'),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 20),
+                          onPressed: () => _startEdit(s),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          onPressed: () => _deleteSemester(s.id, s.name),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
             ],
 
@@ -121,10 +129,7 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
                       : null,
                   icon: const Icon(Icons.remove_circle_outline),
                 ),
-                Text(
-                  '$_totalWeeks',
-                  style: theme.textTheme.titleMedium,
-                ),
+                Text('$_totalWeeks', style: theme.textTheme.titleMedium),
                 IconButton(
                   onPressed: _totalWeeks < 30
                       ? () => setState(() => _totalWeeks++)
@@ -202,25 +207,26 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
   Future<void> _saveSemester() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入学期名称')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入学期名称')));
       return;
     }
 
     final semesterDao = ref.read(semesterDaoProvider);
     final timeSlotDao = ref.read(timeSlotDaoProvider);
     final id = _editingSemesterId ?? const Uuid().v4();
-    final isFirst =
-        (ref.read(allSemestersProvider).valueOrNull ?? []).isEmpty;
+    final isFirst = (ref.read(allSemestersProvider).valueOrNull ?? []).isEmpty;
 
-    await semesterDao.upsertSemester(SemestersCompanion(
-      id: Value(id),
-      name: Value(name),
-      startDate: Value(_startDate),
-      totalWeeks: Value(_totalWeeks),
-      isCurrent: Value(isFirst || _isEditing ? true : false),
-    ));
+    await semesterDao.upsertSemester(
+      SemestersCompanion(
+        id: Value(id),
+        name: Value(name),
+        startDate: Value(_startDate),
+        totalWeeks: Value(_totalWeeks),
+        isCurrent: Value(isFirst || _isEditing ? true : false),
+      ),
+    );
 
     // 如果是新学期，初始化默认节次时间
     if (!_isEditing) {
@@ -234,9 +240,9 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
     _cancelEdit();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isEditing ? '学期已更新' : '学期已创建')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_isEditing ? '学期已更新' : '学期已创建')));
       // 保存后自动回退到课表主页
       Navigator.of(context).popUntil((route) => route.isFirst);
     }

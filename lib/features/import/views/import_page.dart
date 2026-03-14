@@ -13,6 +13,7 @@ import 'package:drift/drift.dart' as drift;
 
 /// 教务系统类型
 enum SchoolSystem {
+  generic(name: 'generic', url: 'about:blank'),
   uestc(name: 'UESTC (EAMS)', url: 'https://eams.uestc.edu.cn/eams/'),
   zhengfang(name: '正方教务系统', url: ''),
   qiangzhi(name: '强智教务系统', url: ''),
@@ -44,6 +45,10 @@ class ImportPage extends ConsumerStatefulWidget {
 }
 
 class _ImportPageState extends ConsumerState<ImportPage> {
+  static const _desktopUserAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
+
   InAppWebViewController? _controller;
   bool _isLoading = true;
   bool _isImporting = false;
@@ -76,7 +81,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     final showWebView = widget.system.url.isNotEmpty || _urlSubmitted;
 
     return Scaffold(
-      appBar: AppBar(title: Text('导入 ${widget.system.name}')),
+      appBar: AppBar(title: const Text('从教务系统导入')),
       body: Column(
         children: [
           // UESTC 进度状态条
@@ -125,7 +130,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
               ),
             ),
           // 提示条（非 UESTC 系统）
-          if (!isUestc && showWebView)
+          if (showWebView)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -140,7 +145,9 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '请登录后导航到课表查询页面，然后点击下方「导入当前页面」按钮',
+                      isUestc
+                          ? '已启用桌面模式和缩放，请自行进入课表查询页后点击下方按钮导入'
+                          : '已启用桌面模式和缩放，请登录后导航到课表查询页面，再点击下方按钮导入',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.orange.shade800,
@@ -289,8 +296,13 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                           MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
                       allowContentAccess: true,
                       allowFileAccess: true,
-                      userAgent:
-                          'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+                      supportZoom: true,
+                      builtInZoomControls: true,
+                      displayZoomControls: false,
+                      useWideViewPort: true,
+                      loadWithOverviewMode: true,
+                      preferredContentMode: UserPreferredContentMode.DESKTOP,
+                      userAgent: _desktopUserAgent,
                     ),
                     onWebViewCreated: (controller) {
                       _controller = controller;
@@ -496,7 +508,8 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     try {
       List<Course> parsedCourses = [];
 
-      if (widget.system == SchoolSystem.uestc &&
+      if ((widget.system == SchoolSystem.uestc ||
+              widget.system == SchoolSystem.generic) &&
           _isUestcCourseTablePage(_currentUrl)) {
         final extracted = await _uestcExtractData();
         if (extracted != null) {
@@ -526,6 +539,9 @@ class _ImportPageState extends ConsumerState<ImportPage> {
         String decodedHtml = html.toString();
 
         switch (widget.system) {
+          case SchoolSystem.generic:
+            parsedCourses = _autoDetectAndParse(decodedHtml, semester.id);
+            break;
           case SchoolSystem.uestc:
             parsedCourses = UestcEamsParser().parse(decodedHtml, semester.id);
             break;
@@ -586,6 +602,21 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     } finally {
       if (mounted) setState(() => _isImporting = false);
     }
+  }
+
+  List<Course> _autoDetectAndParse(String html, String semesterId) {
+    final parsers = <List<Course> Function()>[
+      () => UestcEamsParser().parse(html, semesterId),
+      () => ZhengfangParser().parse(html, semesterId),
+      () => QiangzhiParser().parse(html, semesterId),
+      () => UrpParser().parse(html, semesterId),
+    ];
+
+    for (final parse in parsers) {
+      final courses = parse();
+      if (courses.isNotEmpty) return courses;
+    }
+    return [];
   }
 }
 

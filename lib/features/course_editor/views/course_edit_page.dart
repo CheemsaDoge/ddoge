@@ -87,16 +87,18 @@ class _CourseEditPageState extends ConsumerState<CourseEditPage> {
             icon: const Icon(Icons.delete_outline),
             onPressed: _deleteCourse,
           ),
-          TextButton(
-            onPressed: _saveCourse,
-            child: const Text('保存'),
-          ),
+          TextButton(onPressed: _saveCourse, child: const Text('保存')),
         ],
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.of(context).padding.bottom,
+          ),
           children: [
             TextFormField(
               controller: _nameController,
@@ -134,8 +136,9 @@ class _CourseEditPageState extends ConsumerState<CourseEditPage> {
               items: List.generate(
                 7,
                 (i) => DropdownMenuItem(
-                    value: i + 1,
-                    child: Text(TimeSlotConstants.weekdayNames[i])),
+                  value: i + 1,
+                  child: Text(TimeSlotConstants.weekdayNames[i]),
+                ),
               ),
               onChanged: (v) => setState(() => _dayOfWeek = v!),
             ),
@@ -146,8 +149,8 @@ class _CourseEditPageState extends ConsumerState<CourseEditPage> {
               value: _startSlot,
               items: List.generate(
                 TimeSlotConstants.maxSlotsPerDay,
-                (i) => DropdownMenuItem(
-                    value: i + 1, child: Text('第${i + 1}节')),
+                (i) =>
+                    DropdownMenuItem(value: i + 1, child: Text('第${i + 1}节')),
               ),
               onChanged: (v) {
                 setState(() {
@@ -164,8 +167,9 @@ class _CourseEditPageState extends ConsumerState<CourseEditPage> {
               items: List.generate(
                 TimeSlotConstants.maxSlotsPerDay - _startSlot + 1,
                 (i) => DropdownMenuItem(
-                    value: _startSlot + i,
-                    child: Text('第${_startSlot + i}节')),
+                  value: _startSlot + i,
+                  child: Text('第${_startSlot + i}节'),
+                ),
               ),
               onChanged: (v) => setState(() => _endSlot = v!),
             ),
@@ -183,7 +187,9 @@ class _CourseEditPageState extends ConsumerState<CourseEditPage> {
                     items: List.generate(
                       semester?.totalWeeks ?? 20,
                       (i) => DropdownMenuItem(
-                          value: i + 1, child: Text('第${i + 1}周')),
+                        value: i + 1,
+                        child: Text('第${i + 1}周'),
+                      ),
                     ),
                     onChanged: (v) {
                       setState(() {
@@ -202,8 +208,9 @@ class _CourseEditPageState extends ConsumerState<CourseEditPage> {
                     items: List.generate(
                       (semester?.totalWeeks ?? 20) - _startWeek + 1,
                       (i) => DropdownMenuItem(
-                          value: _startWeek + i,
-                          child: Text('第${_startWeek + i}周')),
+                        value: _startWeek + i,
+                        child: Text('第${_startWeek + i}周'),
+                      ),
                     ),
                     onChanged: (v) => setState(() => _endWeek = v!),
                   ),
@@ -284,7 +291,9 @@ class _CourseEditPageState extends ConsumerState<CourseEditPage> {
               shape: BoxShape.circle,
               border: isSelected
                   ? Border.all(
-                      color: Theme.of(context).colorScheme.primary, width: 3)
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 3,
+                    )
                   : null,
             ),
             child: isSelected
@@ -303,21 +312,23 @@ class _CourseEditPageState extends ConsumerState<CourseEditPage> {
     if (semester == null) return;
 
     final courseDao = ref.read(courseDaoProvider);
-    await courseDao.upsertCourse(CoursesCompanion(
-      id: Value(widget.courseId),
-      name: Value(_nameController.text.trim()),
-      teacher: Value(_teacherController.text.trim()),
-      classroom: Value(_classroomController.text.trim()),
-      dayOfWeek: Value(_dayOfWeek),
-      startSlot: Value(_startSlot),
-      endSlot: Value(_endSlot),
-      startWeek: Value(_startWeek),
-      endWeek: Value(_endWeek),
-      weekType: Value(_weekType),
-      colorIndex: Value(_colorIndex),
-      note: Value(_noteController.text.trim()),
-      semesterId: Value(semester.id),
-    ));
+    await courseDao.upsertCourse(
+      CoursesCompanion(
+        id: Value(widget.courseId),
+        name: Value(_nameController.text.trim()),
+        teacher: Value(_teacherController.text.trim()),
+        classroom: Value(_classroomController.text.trim()),
+        dayOfWeek: Value(_dayOfWeek),
+        startSlot: Value(_startSlot),
+        endSlot: Value(_endSlot),
+        startWeek: Value(_startWeek),
+        endWeek: Value(_endWeek),
+        weekType: Value(_weekType),
+        colorIndex: Value(_colorIndex),
+        note: Value(_noteController.text.trim()),
+        semesterId: Value(semester.id),
+      ),
+    );
 
     if (mounted) context.pop();
   }

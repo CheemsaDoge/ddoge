@@ -63,83 +63,39 @@ class SettingsPage extends ConsumerWidget {
           _SettingsSection(
             title: '课前提醒',
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
+              ListTile(
+                leading: const Icon(Icons.notifications_outlined),
+                title: const Text('提醒时间'),
+                subtitle: Text(
+                  reminderMinutes == 0 ? '已关闭' : '课前 $reminderMinutes 分钟提醒',
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.notifications_outlined),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                '提醒时间',
-                                style: TextStyle(fontSize: 16),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                reminderMinutes == 0
-                                    ? '已关闭'
-                                    : '课前 $reminderMinutes 分钟提醒',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: SegmentedButton<int>(
-                        segments: const [
-                          ButtonSegment(value: 0, label: Text('关')),
-                          ButtonSegment(value: 5, label: Text('5m')),
-                          ButtonSegment(value: 15, label: Text('15m')),
-                          ButtonSegment(value: 30, label: Text('30m')),
-                        ],
-                        selected: {reminderMinutes},
-                        onSelectionChanged: (v) async {
-                          final minutes = v.first;
-                          if (minutes > 0) {
-                            final granted = await NotificationService.instance
-                                .requestPermission();
-                            if (!granted) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('请授予通知权限以启用课前提醒'),
-                                  ),
-                                );
-                              }
-                              return;
-                            }
-                          }
-                          ref.read(reminderMinutesProvider.notifier).state =
-                              minutes;
-                          ref
-                              .read(settingsStorageProvider)
-                              .setReminderMinutes(minutes);
-                        },
-                        style: ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                    ),
+                trailing: _CompactSelect<int>(
+                  value: reminderMinutes,
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text('关闭')),
+                    DropdownMenuItem(value: 5, child: Text('5分钟')),
+                    DropdownMenuItem(value: 15, child: Text('15分钟')),
+                    DropdownMenuItem(value: 30, child: Text('30分钟')),
                   ],
+                  onChanged: (minutes) async {
+                    if (minutes == null) return;
+                    if (minutes > 0) {
+                      final granted = await NotificationService.instance
+                          .requestPermission();
+                      if (!granted) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('请授予通知权限以启用课前提醒')),
+                          );
+                        }
+                        return;
+                      }
+                    }
+                    ref.read(reminderMinutesProvider.notifier).state = minutes;
+                    ref
+                        .read(settingsStorageProvider)
+                        .setReminderMinutes(minutes);
+                  },
                 ),
               ),
             ],
@@ -173,20 +129,17 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.palette_outlined),
                 title: const Text('主题模式'),
-                trailing: SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 0, label: Text('自动')),
-                    ButtonSegment(value: 1, label: Text('浅色')),
-                    ButtonSegment(value: 2, label: Text('深色')),
+                trailing: _CompactSelect<int>(
+                  value: themeMode,
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text('自动')),
+                    DropdownMenuItem(value: 1, child: Text('浅色')),
+                    DropdownMenuItem(value: 2, child: Text('深色')),
                   ],
-                  selected: {themeMode},
-                  onSelectionChanged: (v) {
-                    ref.read(themeModeProvider.notifier).state = v.first;
+                  onChanged: (value) {
+                    if (value == null) return;
+                    ref.read(themeModeProvider.notifier).state = value;
                   },
-                  style: ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
                 ),
               ),
             ],
@@ -199,53 +152,9 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.school_outlined),
                 title: const Text('从教务系统导入'),
-                subtitle: const Text('支持 UESTC、正方、强智、URP 系统'),
+                subtitle: const Text('打开内置浏览器后自行进入课表页面'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    builder: (context) => SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _ImportOption(
-                            icon: Icons.account_balance_outlined,
-                            title: 'UESTC (EAMS)',
-                            onTap: () {
-                              Navigator.pop(context);
-                              context.push('/import/uestc');
-                            },
-                          ),
-                          _ImportOption(
-                            icon: Icons.grid_view,
-                            title: '正方教务系统',
-                            onTap: () {
-                              Navigator.pop(context);
-                              context.push('/import/zhengfang');
-                            },
-                          ),
-                          _ImportOption(
-                            icon: Icons.bolt,
-                            title: '强智教务系统',
-                            onTap: () {
-                              Navigator.pop(context);
-                              context.push('/import/qiangzhi');
-                            },
-                          ),
-                          _ImportOption(
-                            icon: Icons.table_chart_outlined,
-                            title: 'URP 教务系统',
-                            onTap: () {
-                              Navigator.pop(context);
-                              context.push('/import/urp');
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+                onTap: () => context.push('/import/generic'),
               ),
               ListTile(
                 leading: const Icon(Icons.file_download_outlined),
@@ -280,7 +189,7 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('DDoge 课程表'),
-                subtitle: const Text('版本 1.1.0'),
+                subtitle: const Text('版本 1.1.2'),
               ),
             ],
           ),
@@ -507,24 +416,6 @@ class SettingsPage extends ConsumerWidget {
   }
 }
 
-/// 导入选项组件
-class _ImportOption extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-
-  const _ImportOption({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(leading: Icon(icon), title: Text(title), onTap: onTap);
-  }
-}
-
 /// 设置分区组件
 class _SettingsSection extends StatelessWidget {
   const _SettingsSection({required this.title, required this.children});
@@ -548,6 +439,46 @@ class _SettingsSection extends StatelessWidget {
         ),
         ...children,
       ],
+    );
+  }
+}
+
+class _CompactSelect<T> extends StatelessWidget {
+  const _CompactSelect({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final T value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return DropdownButtonHideUnderline(
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 92, maxWidth: 112),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+          ),
+        ),
+        child: DropdownButton<T>(
+          value: value,
+          items: items,
+          onChanged: onChanged,
+          isExpanded: true,
+          borderRadius: BorderRadius.circular(12),
+          style: theme.textTheme.bodyMedium,
+          icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+        ),
+      ),
     );
   }
 }
