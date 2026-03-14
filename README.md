@@ -120,6 +120,15 @@ $env:FLUTTER_STORAGE_BASE_URL='https://storage.flutter-io.cn'
 项目已经包含 `ios/` 工程，但目前主要验证平台是 Android。  
 理论上这是 Flutter 项目，基础页面迁移成本不高，但通知、小组件、文件选择、WebView 行为和教务系统导入兼容性都需要单独测试和补适配。
 
+如果目标只是先做一个“能安装、能查看课表、能编辑课程”的 iOS 测试版，难度中等，不算特别高。  
+如果目标是做到和 Android 当前版本几乎一致，主要工作会集中在下面几块：
+
+- 本地通知权限和触发行为
+- iOS 桌面小组件扩展
+- 文件选择、分享和应用目录访问
+- 教务系统导入页在 iOS WebView 下的兼容性
+- iOS 签名、Bundle ID、Capabilities 和隐私声明
+
 ## 注意事项
 
 - 仓库外的开发记录文件位于 `D:\dev\ddoge_dev_notes.md`
