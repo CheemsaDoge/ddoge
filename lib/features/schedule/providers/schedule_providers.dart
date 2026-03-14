@@ -70,28 +70,44 @@ final timeSlotsProvider = StreamProvider<List<TimeSlot>>((ref) {
 });
 
 /// 主题模式：0=跟随系统, 1=亮色, 2=暗色
-final themeModeProvider = StateProvider<int>((ref) => 0);
+final themeModeProvider = StateProvider<int>((ref) {
+  return ref.read(settingsStorageProvider).getThemeMode();
+});
 
 /// 课表自适应高度开关（true=自适应一屏显示，false=固定高度可滚动）
-final autoFitHeightProvider = StateProvider<bool>((ref) => true);
+final autoFitHeightProvider = StateProvider<bool>((ref) {
+  return ref.read(settingsStorageProvider).getAutoFitHeight();
+});
 
 /// 固定模式下每格高度
-final fixedSlotHeightProvider = StateProvider<double>((ref) => 58.0);
+final fixedSlotHeightProvider = StateProvider<double>((ref) {
+  return ref.read(settingsStorageProvider).getFixedSlotHeight();
+});
 
 /// 课程卡片圆角半径
-final cardBorderRadiusProvider = StateProvider<double>((ref) => 8.0);
+final cardBorderRadiusProvider = StateProvider<double>((ref) {
+  return ref.read(settingsStorageProvider).getCardBorderRadius();
+});
 
 /// 课程卡片透明度（0.0~1.0）
-final cardOpacityProvider = StateProvider<double>((ref) => 0.85);
+final cardOpacityProvider = StateProvider<double>((ref) {
+  return ref.read(settingsStorageProvider).getCardOpacity();
+});
 
 /// 课程卡片字体大小缩放（0.8~1.4）
-final cardFontScaleProvider = StateProvider<double>((ref) => 1.0);
+final cardFontScaleProvider = StateProvider<double>((ref) {
+  return ref.read(settingsStorageProvider).getCardFontScale();
+});
 
 /// 是否显示网格线
-final showGridLinesProvider = StateProvider<bool>((ref) => true);
+final showGridLinesProvider = StateProvider<bool>((ref) {
+  return ref.read(settingsStorageProvider).getShowGridLines();
+});
 
 /// 是否显示当前时间线
-final showTimeLineProvider = StateProvider<bool>((ref) => true);
+final showTimeLineProvider = StateProvider<bool>((ref) {
+  return ref.read(settingsStorageProvider).getShowTimeLine();
+});
 
 /// 网格线颜色索引（0=跟随主题, 1~N=预设颜色）
 final gridLineColorIndexProvider = StateProvider<int>((ref) {

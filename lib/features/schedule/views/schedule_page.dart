@@ -453,8 +453,7 @@ class _ScheduleGrid extends StatelessWidget {
         // 自适应高度：网格填满可用空间；固定高度：使用设置值
         final headerHeight = 36.0; // WeekHeader 高度
         final dividerHeight = 1.0;
-        final bottomOverlayHeight =
-            MediaQuery.of(context).padding.bottom + kCustomNavBarHeight;
+        final bottomOverlayHeight = kCustomNavBarHeight;
         final availableHeight =
             (constraints.maxHeight -
                     headerHeight -

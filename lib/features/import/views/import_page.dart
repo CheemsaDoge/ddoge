@@ -62,6 +62,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
   String _currentUrl = '';
   bool _canGoBack = false;
   bool _canGoForward = false;
+  bool _didPrepareFreshSession = false;
 
   // UESTC 专用状态
   _UestcState _uestcState = _UestcState.loading;
@@ -283,9 +284,6 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                     },
                   )
                 : InAppWebView(
-                    initialUrlRequest: URLRequest(
-                      url: WebUri(_pendingUrl ?? widget.system.url),
-                    ),
                     initialSettings: InAppWebViewSettings(
                       javaScriptEnabled: true,
                       cacheMode: CacheMode.LOAD_DEFAULT,
@@ -304,8 +302,11 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                       preferredContentMode: UserPreferredContentMode.DESKTOP,
                       userAgent: _desktopUserAgent,
                     ),
-                    onWebViewCreated: (controller) {
+                    onWebViewCreated: (controller) async {
                       _controller = controller;
+                      if (_didPrepareFreshSession) return;
+                      _didPrepareFreshSession = true;
+                      await _prepareFreshBrowserSession(controller);
                     },
                     onLoadStart: (controller, url) {
                       setState(() {
@@ -617,6 +618,24 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       if (courses.isNotEmpty) return courses;
     }
     return [];
+  }
+
+  Future<void> _prepareFreshBrowserSession(
+    InAppWebViewController controller,
+  ) async {
+    try {
+      await CookieManager.instance().deleteAllCookies();
+      final webStorageManager = WebStorageManager.instance();
+      await webStorageManager.deleteAllData();
+      await InAppWebViewController.clearAllCache();
+    } catch (_) {
+      // Ignore clearing failures and continue loading the page.
+    }
+
+    final initialUrl = _pendingUrl ?? widget.system.url;
+    if (initialUrl.isNotEmpty) {
+      await controller.loadUrl(urlRequest: URLRequest(url: WebUri(initialUrl)));
+    }
   }
 }
 

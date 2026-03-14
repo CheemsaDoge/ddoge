@@ -25,6 +25,14 @@ class SettingsStorage {
   static const _keyCustomBackgroundPath = 'custom_background_path';
   static const _keyBackgroundOpacity = 'background_opacity';
   static const _keyReminderMinutes = 'reminder_minutes';
+  static const _keyThemeMode = 'theme_mode';
+  static const _keyAutoFitHeight = 'auto_fit_height';
+  static const _keyFixedSlotHeight = 'fixed_slot_height';
+  static const _keyCardBorderRadius = 'card_border_radius';
+  static const _keyCardOpacity = 'card_opacity';
+  static const _keyCardFontScale = 'card_font_scale';
+  static const _keyShowGridLines = 'show_grid_lines';
+  static const _keyShowTimeLine = 'show_time_line';
   static const _keyGridLineColorIndex = 'grid_line_color_index';
   static const _keyGridLineWidth = 'grid_line_width';
   static const _keyGridLineOpacity = 'grid_line_opacity';
@@ -81,6 +89,78 @@ class SettingsStorage {
 
   Future<void> setReminderMinutes(int minutes) async {
     await _prefs.setInt(_keyReminderMinutes, minutes);
+  }
+
+  // 主题模式
+  int getThemeMode() {
+    return _prefs.getInt(_keyThemeMode) ?? 0;
+  }
+
+  Future<void> setThemeMode(int mode) async {
+    await _prefs.setInt(_keyThemeMode, mode);
+  }
+
+  // 是否自适应一屏
+  bool getAutoFitHeight() {
+    return _prefs.getBool(_keyAutoFitHeight) ?? true;
+  }
+
+  Future<void> setAutoFitHeight(bool value) async {
+    await _prefs.setBool(_keyAutoFitHeight, value);
+  }
+
+  // 固定模式格子高度
+  double getFixedSlotHeight() {
+    return _prefs.getDouble(_keyFixedSlotHeight) ?? 58.0;
+  }
+
+  Future<void> setFixedSlotHeight(double value) async {
+    await _prefs.setDouble(_keyFixedSlotHeight, value);
+  }
+
+  // 卡片圆角
+  double getCardBorderRadius() {
+    return _prefs.getDouble(_keyCardBorderRadius) ?? 8.0;
+  }
+
+  Future<void> setCardBorderRadius(double value) async {
+    await _prefs.setDouble(_keyCardBorderRadius, value);
+  }
+
+  // 卡片透明度
+  double getCardOpacity() {
+    return _prefs.getDouble(_keyCardOpacity) ?? 0.85;
+  }
+
+  Future<void> setCardOpacity(double value) async {
+    await _prefs.setDouble(_keyCardOpacity, value);
+  }
+
+  // 卡片字体缩放
+  double getCardFontScale() {
+    return _prefs.getDouble(_keyCardFontScale) ?? 1.0;
+  }
+
+  Future<void> setCardFontScale(double value) async {
+    await _prefs.setDouble(_keyCardFontScale, value);
+  }
+
+  // 显示网格线
+  bool getShowGridLines() {
+    return _prefs.getBool(_keyShowGridLines) ?? true;
+  }
+
+  Future<void> setShowGridLines(bool value) async {
+    await _prefs.setBool(_keyShowGridLines, value);
+  }
+
+  // 显示当前时间线
+  bool getShowTimeLine() {
+    return _prefs.getBool(_keyShowTimeLine) ?? true;
+  }
+
+  Future<void> setShowTimeLine(bool value) async {
+    await _prefs.setBool(_keyShowTimeLine, value);
   }
 
   // 网格线颜色

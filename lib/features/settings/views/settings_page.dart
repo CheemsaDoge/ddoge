@@ -14,6 +14,7 @@ import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
 import 'package:ddoge/features/schedule/providers/database_providers.dart';
 import 'package:ddoge/features/notification/providers/notification_providers.dart';
 import 'package:ddoge/core/router/app_router.dart';
+import 'package:ddoge/core/storage/settings_storage.dart';
 import 'package:ddoge/data/services/notification_service.dart';
 import 'package:ddoge/data/database/app_database.dart';
 
@@ -27,6 +28,7 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final reminderMinutes = ref.watch(reminderMinutesProvider);
+    final settingsStorage = ref.read(settingsStorageProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -139,6 +141,7 @@ class SettingsPage extends ConsumerWidget {
                   onChanged: (value) {
                     if (value == null) return;
                     ref.read(themeModeProvider.notifier).state = value;
+                    settingsStorage.setThemeMode(value);
                   },
                 ),
               ),
@@ -158,13 +161,13 @@ class SettingsPage extends ConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.file_download_outlined),
-                title: const Text('导出课程数据'),
+                title: const Text('导出课程与样式数据'),
                 subtitle: const Text('导出为 JSON 文件并分享'),
                 onTap: () => _exportData(context, ref),
               ),
               ListTile(
                 leading: const Icon(Icons.file_upload_outlined),
-                title: const Text('导入课程数据'),
+                title: const Text('导入课程与样式数据'),
                 subtitle: const Text('从 JSON 文件导入'),
                 onTap: () => _importData(context, ref),
               ),
@@ -189,7 +192,7 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('DDoge 课程表'),
-                subtitle: const Text('版本 1.1.2'),
+                subtitle: const Text('版本 1.1.3'),
               ),
             ],
           ),
@@ -207,19 +210,11 @@ class SettingsPage extends ConsumerWidget {
 
       final semesters = await semesterDao.getAllSemesters();
 
-      if (semesters.isEmpty) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('没有数据可导出')));
-        }
-        return;
-      }
-
       // Collect all courses and time slots
       final List<Map<String, dynamic>> semesterList = [];
       final List<Map<String, dynamic>> courseList = [];
       final List<Map<String, dynamic>> timeSlotList = [];
+      final settingsStorage = ref.read(settingsStorageProvider);
 
       for (final sem in semesters) {
         semesterList.add({
@@ -262,12 +257,15 @@ class SettingsPage extends ConsumerWidget {
         }
       }
 
+      final settingsData = _buildSettingsExportData(settingsStorage);
+
       final exportData = {
-        'version': 1,
+        'version': 2,
         'exportDate': DateTime.now().toIso8601String(),
         'semesters': semesterList,
         'courses': courseList,
         'timeSlots': timeSlotList,
+        'settings': settingsData,
       };
 
       final jsonStr = const JsonEncoder.withIndent('  ').convert(exportData);
@@ -278,7 +276,7 @@ class SettingsPage extends ConsumerWidget {
       final file = File(p.join(tempDir.path, 'ddoge_export_$timestamp.json'));
       await file.writeAsString(jsonStr);
 
-      await Share.shareXFiles([XFile(file.path)], subject: 'DDoge 课程表数据导出');
+      await Share.shareXFiles([XFile(file.path)], subject: 'DDoge 课程表与样式数据导出');
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(
@@ -313,6 +311,7 @@ class SettingsPage extends ConsumerWidget {
       final semesterList = data['semesters'] as List<dynamic>? ?? [];
       final courseList = data['courses'] as List<dynamic>? ?? [];
       final timeSlotList = data['timeSlots'] as List<dynamic>? ?? [];
+      final settingsMap = data['settings'] as Map<String, dynamic>?;
 
       // Show confirmation dialog
       if (!context.mounted) return;
@@ -323,8 +322,9 @@ class SettingsPage extends ConsumerWidget {
           content: Text(
             '即将导入 ${semesterList.length} 个学期、'
             '${courseList.length} 条课程记录、'
-            '${timeSlotList.length} 个节次时间配置。\n\n'
-            '已有数据将被覆盖（相同 ID 的记录），是否继续？',
+            '${timeSlotList.length} 个节次时间配置'
+            '${settingsMap == null ? '' : '，以及样式设置'}。\n\n'
+            '已有数据将被覆盖（相同 ID 的记录/设置项），是否继续？',
           ),
           actions: [
             TextButton(
@@ -396,12 +396,17 @@ class SettingsPage extends ConsumerWidget {
         );
       }
 
+      if (settingsMap != null) {
+        await _importSettings(ref, settingsMap);
+      }
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               '导入成功：${semesterList.length} 个学期、'
-              '${courseList.length} 条课程记录',
+              '${courseList.length} 条课程记录'
+              '${settingsMap == null ? '' : '，样式设置已恢复'}',
             ),
           ),
         );
@@ -412,6 +417,147 @@ class SettingsPage extends ConsumerWidget {
           context,
         ).showSnackBar(SnackBar(content: Text('导入失败: $e')));
       }
+    }
+  }
+
+  Map<String, dynamic> _buildSettingsExportData(SettingsStorage storage) {
+    return {
+      'themeMode': storage.getThemeMode(),
+      'reminderMinutes': storage.getReminderMinutes(),
+      'autoFitHeight': storage.getAutoFitHeight(),
+      'fixedSlotHeight': storage.getFixedSlotHeight(),
+      'cardBorderRadius': storage.getCardBorderRadius(),
+      'cardOpacity': storage.getCardOpacity(),
+      'cardFontScale': storage.getCardFontScale(),
+      'showGridLines': storage.getShowGridLines(),
+      'showTimeLine': storage.getShowTimeLine(),
+      'gridLineColorIndex': storage.getGridLineColorIndex(),
+      'gridLineWidth': storage.getGridLineWidth(),
+      'gridLineOpacity': storage.getGridLineOpacity(),
+      'gridLineDashed': storage.getGridLineDashed(),
+      'backgroundType': storage.getBackgroundType().index,
+      'builtinWallpaper': storage.getBuiltinWallpaper(),
+      'customBackgroundPath': storage.getCustomBackgroundPath(),
+      'backgroundOpacity': storage.getBackgroundOpacity(),
+    };
+  }
+
+  Future<void> _importSettings(
+    WidgetRef ref,
+    Map<String, dynamic> settingsMap,
+  ) async {
+    final storage = ref.read(settingsStorageProvider);
+
+    final themeMode = (settingsMap['themeMode'] as num?)?.toInt();
+    if (themeMode != null) {
+      ref.read(themeModeProvider.notifier).state = themeMode;
+      await storage.setThemeMode(themeMode);
+    }
+
+    final reminderMinutes = (settingsMap['reminderMinutes'] as num?)?.toInt();
+    if (reminderMinutes != null) {
+      ref.read(reminderMinutesProvider.notifier).state = reminderMinutes;
+      await storage.setReminderMinutes(reminderMinutes);
+    }
+
+    final autoFitHeight = settingsMap['autoFitHeight'] as bool?;
+    if (autoFitHeight != null) {
+      ref.read(autoFitHeightProvider.notifier).state = autoFitHeight;
+      await storage.setAutoFitHeight(autoFitHeight);
+    }
+
+    final fixedSlotHeight = (settingsMap['fixedSlotHeight'] as num?)
+        ?.toDouble();
+    if (fixedSlotHeight != null) {
+      ref.read(fixedSlotHeightProvider.notifier).state = fixedSlotHeight;
+      await storage.setFixedSlotHeight(fixedSlotHeight);
+    }
+
+    final cardBorderRadius = (settingsMap['cardBorderRadius'] as num?)
+        ?.toDouble();
+    if (cardBorderRadius != null) {
+      ref.read(cardBorderRadiusProvider.notifier).state = cardBorderRadius;
+      await storage.setCardBorderRadius(cardBorderRadius);
+    }
+
+    final cardOpacity = (settingsMap['cardOpacity'] as num?)?.toDouble();
+    if (cardOpacity != null) {
+      ref.read(cardOpacityProvider.notifier).state = cardOpacity;
+      await storage.setCardOpacity(cardOpacity);
+    }
+
+    final cardFontScale = (settingsMap['cardFontScale'] as num?)?.toDouble();
+    if (cardFontScale != null) {
+      ref.read(cardFontScaleProvider.notifier).state = cardFontScale;
+      await storage.setCardFontScale(cardFontScale);
+    }
+
+    final showGridLines = settingsMap['showGridLines'] as bool?;
+    if (showGridLines != null) {
+      ref.read(showGridLinesProvider.notifier).state = showGridLines;
+      await storage.setShowGridLines(showGridLines);
+    }
+
+    final showTimeLine = settingsMap['showTimeLine'] as bool?;
+    if (showTimeLine != null) {
+      ref.read(showTimeLineProvider.notifier).state = showTimeLine;
+      await storage.setShowTimeLine(showTimeLine);
+    }
+
+    final gridLineColorIndex = (settingsMap['gridLineColorIndex'] as num?)
+        ?.toInt();
+    if (gridLineColorIndex != null) {
+      ref.read(gridLineColorIndexProvider.notifier).state = gridLineColorIndex;
+      await storage.setGridLineColorIndex(gridLineColorIndex);
+    }
+
+    final gridLineWidth = (settingsMap['gridLineWidth'] as num?)?.toDouble();
+    if (gridLineWidth != null) {
+      ref.read(gridLineWidthProvider.notifier).state = gridLineWidth;
+      await storage.setGridLineWidth(gridLineWidth);
+    }
+
+    final gridLineOpacity = (settingsMap['gridLineOpacity'] as num?)
+        ?.toDouble();
+    if (gridLineOpacity != null) {
+      ref.read(gridLineOpacityProvider.notifier).state = gridLineOpacity;
+      await storage.setGridLineOpacity(gridLineOpacity);
+    }
+
+    final gridLineDashed = settingsMap['gridLineDashed'] as bool?;
+    if (gridLineDashed != null) {
+      ref.read(gridLineDashedProvider.notifier).state = gridLineDashed;
+      await storage.setGridLineDashed(gridLineDashed);
+    }
+
+    final backgroundTypeIndex = (settingsMap['backgroundType'] as num?)
+        ?.toInt();
+    if (backgroundTypeIndex != null &&
+        backgroundTypeIndex >= 0 &&
+        backgroundTypeIndex < BackgroundType.values.length) {
+      final backgroundType = BackgroundType.values[backgroundTypeIndex];
+      ref.read(backgroundTypeProvider.notifier).state = backgroundType;
+      await storage.setBackgroundType(backgroundType);
+    }
+
+    final builtinWallpaper = (settingsMap['builtinWallpaper'] as num?)?.toInt();
+    if (builtinWallpaper != null) {
+      ref.read(builtinWallpaperProvider.notifier).state = builtinWallpaper;
+      await storage.setBuiltinWallpaper(builtinWallpaper);
+    }
+
+    final customBackgroundPath = settingsMap['customBackgroundPath'] as String?;
+    if (customBackgroundPath != null) {
+      ref.read(customBackgroundPathProvider.notifier).state =
+          customBackgroundPath;
+      await storage.setCustomBackgroundPath(customBackgroundPath);
+    }
+
+    final backgroundOpacity = (settingsMap['backgroundOpacity'] as num?)
+        ?.toDouble();
+    if (backgroundOpacity != null) {
+      ref.read(backgroundOpacityProvider.notifier).state = backgroundOpacity;
+      await storage.setBackgroundOpacity(backgroundOpacity);
     }
   }
 }

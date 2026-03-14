@@ -54,6 +54,7 @@ class PersonalizationSettingsPage extends ConsumerWidget {
                 value: autoFit,
                 onChanged: (v) {
                   ref.read(autoFitHeightProvider.notifier).state = v;
+                  settingsStorage.setAutoFitHeight(v);
                 },
               ),
               if (!autoFit)
@@ -68,6 +69,7 @@ class PersonalizationSettingsPage extends ConsumerWidget {
                     label: '${fixedSlotHeight.round()}',
                     onChanged: (v) {
                       ref.read(fixedSlotHeightProvider.notifier).state = v;
+                      settingsStorage.setFixedSlotHeight(v);
                     },
                   ),
                   trailing: Text('${fixedSlotHeight.round()}'),
@@ -78,6 +80,7 @@ class PersonalizationSettingsPage extends ConsumerWidget {
                 value: showGrid,
                 onChanged: (v) {
                   ref.read(showGridLinesProvider.notifier).state = v;
+                  settingsStorage.setShowGridLines(v);
                 },
               ),
               if (showGrid) ...[
@@ -170,6 +173,7 @@ class PersonalizationSettingsPage extends ConsumerWidget {
                 value: showTimeLine,
                 onChanged: (v) {
                   ref.read(showTimeLineProvider.notifier).state = v;
+                  settingsStorage.setShowTimeLine(v);
                 },
               ),
             ],
@@ -190,6 +194,7 @@ class PersonalizationSettingsPage extends ConsumerWidget {
                   label: '${cardRadius.round()}',
                   onChanged: (v) {
                     ref.read(cardBorderRadiusProvider.notifier).state = v;
+                    settingsStorage.setCardBorderRadius(v);
                   },
                 ),
                 trailing: Text('${cardRadius.round()}'),
@@ -205,6 +210,7 @@ class PersonalizationSettingsPage extends ConsumerWidget {
                   label: '${(cardOpacity * 100).round()}%',
                   onChanged: (v) {
                     ref.read(cardOpacityProvider.notifier).state = v;
+                    settingsStorage.setCardOpacity(v);
                   },
                 ),
                 trailing: Text('${(cardOpacity * 100).round()}%'),
@@ -220,6 +226,7 @@ class PersonalizationSettingsPage extends ConsumerWidget {
                   label: '${(cardFontScale * 100).round()}%',
                   onChanged: (v) {
                     ref.read(cardFontScaleProvider.notifier).state = v;
+                    settingsStorage.setCardFontScale(v);
                   },
                 ),
                 trailing: Text('${(cardFontScale * 100).round()}%'),
