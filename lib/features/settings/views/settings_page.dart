@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
+import 'package:ddoge/core/router/app_router.dart';
 
 import 'package:ddoge/shared/widgets/glass_container.dart';
 
@@ -187,8 +188,15 @@ class SettingsPage extends ConsumerWidget {
 
           // 数据管理
           _SettingsSection(
-            title: '数据',
+            title: '数据与导入',
             children: [
+              ListTile(
+                leading: const Icon(Icons.school_outlined),
+                title: const Text('从 UESTC 导入'),
+                subtitle: const Text('电子科技大学教务系统 (eams.uestc.edu.cn)'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push(AppRoutes.uestcImport),
+              ),
               ListTile(
                 leading: const Icon(Icons.file_download_outlined),
                 title: const Text('导出课程数据'),

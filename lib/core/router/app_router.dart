@@ -9,6 +9,7 @@ import 'package:ddoge/features/settings/views/settings_page.dart';
 import 'package:ddoge/features/settings/views/time_slot_settings_page.dart';
 import 'package:ddoge/features/settings/views/semester_settings_page.dart';
 import 'package:ddoge/features/settings/views/background_settings_page.dart';
+import 'package:ddoge/features/import/views/import_page.dart';
 import 'package:ddoge/shared/widgets/glass_container.dart';
 import 'package:ddoge/shared/widgets/background_layer.dart';
 
@@ -24,6 +25,7 @@ class AppRoutes {
   static const String timeSlotSettings = '/settings/time-slots';
   static const String semesterSettings = '/settings/semester';
   static const String backgroundSettings = '/settings/background';
+  static const String uestcImport = '/import/uestc';
 }
 
 /// 底部导航壳页面的 Key，用于从外部控制导航切换
@@ -101,14 +103,9 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/course/edit/:id',
+      path: AppRoutes.uestcImport,
       parentNavigatorKey: rootNavigatorKey,
-      pageBuilder: (context, state) => CustomTransitionPage(
-        child: CourseEditPage(
-          courseId: state.pathParameters['id']!,
-        ),
-        transitionsBuilder: _slideUpTransition,
-      ),
+      builder: (context, state) => const UestcEamsImportPage(),
     ),
   ],
 );
