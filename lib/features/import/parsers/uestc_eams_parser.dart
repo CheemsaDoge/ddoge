@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:html/parser.dart' as html_parser;
 import 'package:uuid/uuid.dart';
 import 'package:ddoge/data/database/app_database.dart';
@@ -6,17 +7,80 @@ import 'package:ddoge/data/database/app_database.dart';
 class UestcEamsParser {
   static const String _uuidNamespace = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 
-  /// 解析课表 HTML
-  /// [html] 是 courseTable.action 的响应内容
-  /// [semesterId] 当前要导入到的学期 ID
+  /// 从 JS 注入返回的 JSON 解析课表
+  /// JSON 格式: {"courses": [{ teacherName, courseFullName, roomName, weekBitmap, indices: [{day, slot}] }]}
+  List<Course> parseFromJson(String jsonStr, String semesterId) {
+    final uuid = const Uuid();
+    final courses = <Course>[];
+
+    final data = json.decode(jsonStr) as Map<String, dynamic>;
+    if (data.containsKey('error')) return courses;
+
+    final items = data['courses'] as List<dynamic>? ?? [];
+
+    for (final item in items) {
+      final teacher = (item['teacherName'] as String?) ?? '';
+      final courseFullName = (item['courseFullName'] as String?) ?? '';
+      final roomName = (item['roomName'] as String?) ?? '';
+      final weekBitmap = (item['weekBitmap'] as String?) ?? '';
+      final indices = (item['indices'] as List<dynamic>?) ?? [];
+
+      if (indices.isEmpty || weekBitmap.isEmpty) continue;
+
+      final weeks = _parseWeeks(weekBitmap);
+      if (weeks == null) continue;
+
+      // 课程名：去掉括号中的课程编号
+      var name = courseFullName;
+      final nameMatch = RegExp(r'^(.+?)\([A-Z]').firstMatch(courseFullName);
+      if (nameMatch != null) {
+        name = nameMatch.group(1)!;
+      }
+
+      // 按天分组
+      final dayToSlots = <int, List<int>>{};
+      for (final idx in indices) {
+        final day = (idx['day'] as int) + 1; // 0-indexed → 1-indexed
+        final slot = (idx['slot'] as int) + 1;
+        dayToSlots.putIfAbsent(day, () => []);
+        dayToSlots[day]!.add(slot);
+      }
+
+      dayToSlots.forEach((day, daySlots) {
+        daySlots.sort();
+
+        // 合并连续节次
+        var start = daySlots[0];
+        var end = daySlots[0];
+
+        for (var j = 1; j < daySlots.length; j++) {
+          if (daySlots[j] == end + 1) {
+            end = daySlots[j];
+          } else {
+            courses.add(_createCourse(
+              name, teacher, roomName, day, start, end, weeks, semesterId, uuid,
+            ));
+            start = daySlots[j];
+            end = daySlots[j];
+          }
+        }
+        courses.add(_createCourse(
+          name, teacher, roomName, day, start, end, weeks, semesterId, uuid,
+        ));
+      });
+    }
+
+    return courses;
+  }
+
+  /// 解析课表 HTML（fallback）
   List<Course> parse(String html, String semesterId) {
     final document = html_parser.parse(html);
     final scripts = document.getElementsByTagName('script');
-    
+
     final courses = <Course>[];
     final uuid = const Uuid();
 
-    // 查找包含 TaskActivity 的脚本块
     for (final script in scripts) {
       final content = script.text;
       if (content.contains('new TaskActivity')) {
@@ -29,31 +93,26 @@ class UestcEamsParser {
 
   List<Course> _parseScriptContent(String content, String semesterId, Uuid uuid) {
     final courses = <Course>[];
-    
-    // 正则提取：activity = new TaskActivity("ID", "教师", "课程ID", "课程名(编号)", "代码", "教室", "周次位图");
+
     final activityRegExp = RegExp(
       r'new TaskActivity\("([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)"\)',
     );
-
-    // 正则提取：index = (dayOfWeek-1)*unitCount + (startSlot-1);
-    // 注意：EAMS 的 index = dayIndex * unitCount + slotIndex
-    // dayIndex 0-6 (周一-周日), slotIndex 0-11
-    final indexRegExp = RegExp(r'index\s*=\s*(\d+)\*unitCount\+(\d+);');
+    final indexRegExp = RegExp(r'index\s*=\s*(\d+)\s*\*\s*unitCount\s*\+\s*(\d+)');
 
     final lines = content.split('\n');
-    
+
     _RawActivity? currentActivity;
-    final Map<_RawActivity, List<int>> activityIndices = {};
+    final List<MapEntry<_RawActivity, _IndexPair>> activitySlots = [];
 
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i].trim();
-      
+
       final activityMatch = activityRegExp.firstMatch(line);
       if (activityMatch != null) {
         currentActivity = _RawActivity(
           teacher: activityMatch.group(2) ?? '',
           name: activityMatch.group(4) ?? '',
-          classroom: activityMatch.group(6)?.trim() ?? '',
+          classroom: (activityMatch.group(6) ?? '').trim(),
           weekBitmap: activityMatch.group(7) ?? '',
         );
         continue;
@@ -64,51 +123,58 @@ class UestcEamsParser {
         if (indexMatch != null) {
           final dayIndex = int.parse(indexMatch.group(1)!);
           final slotIndex = int.parse(indexMatch.group(2)!);
-          // 这里的 slotIndex 是从 0 开始的第几节课
-          // 实际存储我们用 1-indexed
-          final absoluteSlot = dayIndex * 100 + slotIndex; // 临时记录
-          
-          activityIndices.putIfAbsent(currentActivity, () => []);
-          activityIndices[currentActivity]!.add(absoluteSlot);
+          activitySlots.add(MapEntry(currentActivity, _IndexPair(dayIndex, slotIndex)));
         }
       }
     }
 
-    // 将 RawActivity 转换为 Course 对象
-    activityIndices.forEach((raw, slots) {
-      if (slots.isEmpty) return;
+    // Group by activity
+    final Map<_RawActivity, List<_IndexPair>> grouped = {};
+    for (final entry in activitySlots) {
+      grouped.putIfAbsent(entry.key, () => []);
+      grouped[entry.key]!.add(entry.value);
+    }
 
-      // 按天分组处理连续节次
-      final dayToSlots = <int, List<int>>{};
-      for (final s in slots) {
-        final day = (s / 100).floor() + 1; // 1-7
-        final slot = (s % 100) + 1; // 1-12
-        dayToSlots.putIfAbsent(day, () => []);
-        dayToSlots[day]!.add(slot);
-      }
+    grouped.forEach((raw, pairs) {
+      if (pairs.isEmpty) return;
 
       final weeks = _parseWeeks(raw.weekBitmap);
       if (weeks == null) return;
 
+      var name = raw.name;
+      final nameMatch = RegExp(r'^(.+?)\([A-Z]').firstMatch(raw.name);
+      if (nameMatch != null) {
+        name = nameMatch.group(1)!;
+      }
+
+      // Group by day
+      final dayToSlots = <int, List<int>>{};
+      for (final p in pairs) {
+        final day = p.day + 1; // 0-indexed → 1-indexed
+        final slot = p.slot + 1;
+        dayToSlots.putIfAbsent(day, () => []);
+        dayToSlots[day]!.add(slot);
+      }
+
       dayToSlots.forEach((day, daySlots) {
         daySlots.sort();
-        
-        // 合并连续节次（例如 1,2 -> 1-2）
         var start = daySlots[0];
         var end = daySlots[0];
-        
+
         for (var j = 1; j < daySlots.length; j++) {
           if (daySlots[j] == end + 1) {
             end = daySlots[j];
           } else {
-            // 断开了，先保存之前的
-            courses.add(_createCourse(raw, day, start, end, weeks, semesterId, uuid));
+            courses.add(_createCourse(
+              name, raw.teacher, raw.classroom, day, start, end, weeks, semesterId, uuid,
+            ));
             start = daySlots[j];
             end = daySlots[j];
           }
         }
-        // 保存最后一组
-        courses.add(_createCourse(raw, day, start, end, weeks, semesterId, uuid));
+        courses.add(_createCourse(
+          name, raw.teacher, raw.classroom, day, start, end, weeks, semesterId, uuid,
+        ));
       });
     });
 
@@ -116,59 +182,31 @@ class UestcEamsParser {
   }
 
   /// 解析周次位图 (如 "01111100...")
-  /// 返回 [startWeek, endWeek, weekType]
-  /// weekType: 0=每周, 1=单周, 2=双周
+  /// 位置 i 的 '1' 表示第 i+1 周有课（0-indexed bitmap → 1-indexed weeks）
   _WeekInfo? _parseWeeks(String bitmap) {
     if (bitmap.isEmpty) return null;
-    
-    int firstWeek = -1;
-    int lastWeek = -1;
-    
+
+    final activeWeeks = <int>[];
     for (var i = 0; i < bitmap.length; i++) {
       if (bitmap[i] == '1') {
-        if (firstWeek == -1) firstWeek = i;
-        lastWeek = i;
+        activeWeeks.add(i + 1); // bitmap[0]='1' → week 1
       }
     }
 
-    if (firstWeek == -1) return null;
+    if (activeWeeks.isEmpty) return null;
 
-    // 判断单双周
-    bool onlyOdd = true;
-    bool onlyEven = true;
-    bool all = true;
+    final firstWeek = activeWeeks.first;
+    final lastWeek = activeWeeks.last;
 
-    for (var i = firstWeek; i <= lastWeek; i++) {
-      if (bitmap[i] == '1') {
-        if (i % 2 == 0) onlyEven = false; // 位图索引 1 是第 1 周 (奇数)
-        if (i % 2 != 0) onlyOdd = false;
-      } else {
-        // 如果中间有 0，判断是否是单/双周模式
-        if (i % 2 != 0 && i <= lastWeek) { // 奇数周没课
-          // 可能双周
-        }
-      }
-    }
-    
-    // 简化处理：目前只支持提取范围，具体的单双周逻辑可以根据 bitmap 更精确计算
-    // EAMS 的位图通常很准，我们取 [firstWeek, lastWeek]
-    // 并检查步长
-    int weekType = 0;
-    List<int> activeWeeks = [];
-    for(var i=0; i<bitmap.length; i++) {
-      if(bitmap[i] == '1') activeWeeks.add(i);
-    }
-    
+    // 判断单双周：检查所有有课的周是否纯奇或纯偶
+    int weekType = 0; // 0=每周
     if (activeWeeks.length > 1) {
-      bool isStep2 = true;
-      for (var i = 1; i < activeWeeks.length; i++) {
-        if (activeWeeks[i] - activeWeeks[i-1] != 2) {
-          isStep2 = false;
-          break;
-        }
-      }
-      if (isStep2) {
-        weekType = (activeWeeks[0] % 2 != 0) ? 1 : 2;
+      final allOdd = activeWeeks.every((w) => w % 2 == 1);
+      final allEven = activeWeeks.every((w) => w % 2 == 0);
+      if (allOdd) {
+        weekType = 1; // 单周
+      } else if (allEven) {
+        weekType = 2; // 双周
       }
     }
 
@@ -180,7 +218,9 @@ class UestcEamsParser {
   }
 
   Course _createCourse(
-    _RawActivity raw,
+    String name,
+    String teacher,
+    String classroom,
     int day,
     int start,
     int end,
@@ -188,24 +228,18 @@ class UestcEamsParser {
     String semesterId,
     Uuid uuid,
   ) {
-    // 移除课程名中的编号，如 "微积分(1234)" -> "微积分"
-    var name = raw.name;
-    if (name.contains('(')) {
-      name = name.substring(0, name.lastIndexOf('('));
-    }
-
     return Course(
-      id: uuid.v5(_uuidNamespace, '${raw.name}-$day-$start-$semesterId'),
+      id: uuid.v5(_uuidNamespace, '$name-$day-$start-${weeks.startWeek}-$semesterId'),
       name: name,
-      teacher: raw.teacher,
-      classroom: raw.classroom,
+      teacher: teacher,
+      classroom: classroom,
       dayOfWeek: day,
       startSlot: start,
       endSlot: end,
       startWeek: weeks.startWeek,
       endWeek: weeks.endWeek,
       weekType: weeks.weekType,
-      colorIndex: 0, // 导入后由应用逻辑分配颜色
+      colorIndex: 0,
       semesterId: semesterId,
       note: '',
     );
@@ -238,6 +272,12 @@ class _RawActivity {
   @override
   int get hashCode =>
       teacher.hashCode ^ name.hashCode ^ classroom.hashCode ^ weekBitmap.hashCode;
+}
+
+class _IndexPair {
+  final int day;
+  final int slot;
+  _IndexPair(this.day, this.slot);
 }
 
 class _WeekInfo {

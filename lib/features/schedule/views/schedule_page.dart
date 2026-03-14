@@ -10,7 +10,6 @@ import '../providers/schedule_providers.dart';
 import '../widgets/course_card.dart';
 import '../widgets/time_column.dart';
 import '../widgets/week_header.dart';
-import '../widgets/week_selector.dart';
 import '../widgets/current_time_line.dart';
 
 import 'package:ddoge/shared/widgets/glass_container.dart';
@@ -78,10 +77,41 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       extendBodyBehindAppBar: true,
       appBar: GlassAppBar(
         title: semesterAsync.when(
-          data: (semester) => Text(
-            semester?.name ?? 'DDoge 课程表',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
+          data: (semester) {
+            if (semester == null) {
+              return const Text('DDoge 课程表',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600));
+            }
+            final currentWeek = app_date.DateUtils.currentWeekNumber(semester.startDate)
+                .clamp(1, semester.totalWeeks);
+            final weekLabel = selectedWeek == currentWeek
+                ? '第$selectedWeek周'
+                : '第$selectedWeek周';
+            return Row(
+              children: [
+                Text(
+                  semester.name,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    weekLabel,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
           loading: () => const Text('DDoge 课程表'),
           error: (_, _) => const Text('DDoge 课程表'),
         ),
@@ -116,16 +146,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             children: [
               // 留出 AppBar 的空间（因为 extendBodyBehindAppBar: true）
               SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
-              // 周数选择器
-              WeekSelector(
-                totalWeeks: totalWeeks,
-                selectedWeek: selectedWeek,
-                currentWeek: currentWeek,
-                onWeekSelected: (week) {
-                  ref.read(selectedWeekProvider.notifier).state = week;
-                },
-              ),
-              const Divider(height: 1),
               // 课程表网格（PageView 实现平滑滑动过渡）
               Expanded(
                 child: PageView.builder(
@@ -186,7 +206,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 ),
               ),
               // 留出底部导航栏的空间（因为 extendBody: true 在 shell 中设置了）
-              SizedBox(height: MediaQuery.of(context).padding.bottom + kBottomNavigationBarHeight),
+              SizedBox(height: MediaQuery.of(context).padding.bottom + kCustomNavBarHeight),
             ],
           );
         },
@@ -427,10 +447,6 @@ class _ScheduleGrid extends StatelessWidget {
           // 空白格子的点击区域
           ..._buildSlotHitAreas(
               context, slotCount, slotHeight, dayWidth, timeColumnWidth),
-          // 选中高亮 + 拖拽手柄
-          if (selectedDay != null && selectedStartSlot != null)
-            ..._buildSelectionOverlay(
-                context, slotCount, slotHeight, dayWidth, timeColumnWidth),
           // 左侧时间列
           Positioned(
             left: 0,
@@ -442,6 +458,10 @@ class _ScheduleGrid extends StatelessWidget {
           ),
           // 课程卡片
           ..._buildCourseCards(context, dayWidth, slotHeight, timeColumnWidth),
+          // 选中高亮 + 拖拽手柄（渲染在课程卡片之上，避免被遮挡）
+          if (selectedDay != null && selectedStartSlot != null)
+            ..._buildSelectionOverlay(
+                context, slotCount, slotHeight, dayWidth, timeColumnWidth),
           // 当前时间线
           if (showTimeLine)
             CurrentTimeLine(

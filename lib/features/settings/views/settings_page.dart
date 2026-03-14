@@ -1,11 +1,21 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:drift/drift.dart' as drift;
 
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
+import 'package:ddoge/features/schedule/providers/database_providers.dart';
 import 'package:ddoge/features/notification/providers/notification_providers.dart';
 import 'package:ddoge/core/router/app_router.dart';
 import 'package:ddoge/data/services/notification_service.dart';
+import 'package:ddoge/data/database/app_database.dart';
 
 import 'package:ddoge/shared/widgets/glass_container.dart';
 
@@ -16,13 +26,6 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
-    final autoFit = ref.watch(autoFitHeightProvider);
-    final fixedSlotHeight = ref.watch(fixedSlotHeightProvider);
-    final cardRadius = ref.watch(cardBorderRadiusProvider);
-    final cardOpacity = ref.watch(cardOpacityProvider);
-    final cardFontScale = ref.watch(cardFontScaleProvider);
-    final showGrid = ref.watch(showGridLinesProvider);
-    final showTimeLine = ref.watch(showTimeLineProvider);
     final reminderMinutes = ref.watch(reminderMinutesProvider);
 
     return Scaffold(
@@ -32,7 +35,7 @@ class SettingsPage extends ConsumerWidget {
       body: ListView(
         padding: EdgeInsets.only(
           top: MediaQuery.of(context).padding.top + kToolbarHeight,
-          bottom: MediaQuery.of(context).padding.bottom + kBottomNavigationBarHeight,
+          bottom: MediaQuery.of(context).padding.bottom + kCustomNavBarHeight,
         ),
         children: [
           // 学期管理
@@ -100,102 +103,16 @@ class SettingsPage extends ConsumerWidget {
             ],
           ),
 
-          // 课表显示
+          // 个性化（跳转子页面）
           _SettingsSection(
-            title: '课表显示',
-            children: [
-              SwitchListTile(
-                secondary: const Icon(Icons.fit_screen_outlined),
-                title: const Text('自适应一屏显示'),
-                subtitle: const Text('课表自动缩放以适应屏幕，无需滚动'),
-                value: autoFit,
-                onChanged: (v) {
-                  ref.read(autoFitHeightProvider.notifier).state = v;
-                },
-              ),
-              if (!autoFit)
-                ListTile(
-                  leading: const Icon(Icons.height),
-                  title: const Text('格子高度'),
-                  subtitle: Slider(
-                    value: fixedSlotHeight,
-                    min: 40,
-                    max: 100,
-                    divisions: 12,
-                    label: '${fixedSlotHeight.round()}',
-                    onChanged: (v) {
-                      ref.read(fixedSlotHeightProvider.notifier).state = v;
-                    },
-                  ),
-                  trailing: Text('${fixedSlotHeight.round()}'),
-                ),
-            ],
-          ),
-
-          // 卡片样式
-          _SettingsSection(
-            title: '卡片样式',
+            title: '个性化',
             children: [
               ListTile(
-                leading: const Icon(Icons.rounded_corner),
-                title: const Text('圆角半径'),
-                subtitle: Slider(
-                  value: cardRadius,
-                  min: 0,
-                  max: 20,
-                  divisions: 20,
-                  label: '${cardRadius.round()}',
-                  onChanged: (v) {
-                    ref.read(cardBorderRadiusProvider.notifier).state = v;
-                  },
-                ),
-                trailing: Text('${cardRadius.round()}'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.opacity),
-                title: const Text('透明度'),
-                subtitle: Slider(
-                  value: cardOpacity,
-                  min: 0.3,
-                  max: 1.0,
-                  divisions: 14,
-                  label: '${(cardOpacity * 100).round()}%',
-                  onChanged: (v) {
-                    ref.read(cardOpacityProvider.notifier).state = v;
-                  },
-                ),
-                trailing: Text('${(cardOpacity * 100).round()}%'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.text_fields),
-                title: const Text('字体缩放'),
-                subtitle: Slider(
-                  value: cardFontScale,
-                  min: 0.8,
-                  max: 1.4,
-                  divisions: 12,
-                  label: '${(cardFontScale * 100).round()}%',
-                  onChanged: (v) {
-                    ref.read(cardFontScaleProvider.notifier).state = v;
-                  },
-                ),
-                trailing: Text('${(cardFontScale * 100).round()}%'),
-              ),
-              SwitchListTile(
-                secondary: const Icon(Icons.grid_on),
-                title: const Text('显示网格线'),
-                value: showGrid,
-                onChanged: (v) {
-                  ref.read(showGridLinesProvider.notifier).state = v;
-                },
-              ),
-              SwitchListTile(
-                secondary: const Icon(Icons.timeline),
-                title: const Text('显示当前时间线'),
-                value: showTimeLine,
-                onChanged: (v) {
-                  ref.read(showTimeLineProvider.notifier).state = v;
-                },
+                leading: const Icon(Icons.palette_outlined),
+                title: const Text('课表显示与卡片样式'),
+                subtitle: const Text('网格线、时间线、圆角、透明度等'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/settings/personalization'),
               ),
             ],
           ),
@@ -291,22 +208,14 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.file_download_outlined),
                 title: const Text('导出课程数据'),
-                subtitle: const Text('导出为 JSON 文件'),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('导出功能将在后续版本实现')),
-                  );
-                },
+                subtitle: const Text('导出为 JSON 文件并分享'),
+                onTap: () => _exportData(context, ref),
               ),
               ListTile(
                 leading: const Icon(Icons.file_upload_outlined),
                 title: const Text('导入课程数据'),
                 subtitle: const Text('从 JSON 文件导入'),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('导入功能将在后续版本实现')),
-                  );
-                },
+                onTap: () => _importData(context, ref),
               ),
               ListTile(
                 leading: const Icon(Icons.widgets_outlined),
@@ -329,13 +238,227 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('DDoge 课程表'),
-                subtitle: const Text('版本 1.0.0'),
+                subtitle: const Text('版本 1.1.0'),
               ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  /// 导出课程数据为 JSON
+  Future<void> _exportData(BuildContext context, WidgetRef ref) async {
+    try {
+      final semesterDao = ref.read(semesterDaoProvider);
+      final courseDao = ref.read(courseDaoProvider);
+      final timeSlotDao = ref.read(timeSlotDaoProvider);
+
+      final semesters = await semesterDao.getAllSemesters();
+
+      if (semesters.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('没有数据可导出')),
+          );
+        }
+        return;
+      }
+
+      // Collect all courses and time slots
+      final List<Map<String, dynamic>> semesterList = [];
+      final List<Map<String, dynamic>> courseList = [];
+      final List<Map<String, dynamic>> timeSlotList = [];
+
+      for (final sem in semesters) {
+        semesterList.add({
+          'id': sem.id,
+          'name': sem.name,
+          'startDate': sem.startDate.toIso8601String(),
+          'totalWeeks': sem.totalWeeks,
+          'isCurrent': sem.isCurrent,
+        });
+
+        final courses = await courseDao.getCoursesForSemester(sem.id);
+        for (final c in courses) {
+          courseList.add({
+            'id': c.id,
+            'name': c.name,
+            'teacher': c.teacher,
+            'classroom': c.classroom,
+            'dayOfWeek': c.dayOfWeek,
+            'startSlot': c.startSlot,
+            'endSlot': c.endSlot,
+            'startWeek': c.startWeek,
+            'endWeek': c.endWeek,
+            'weekType': c.weekType,
+            'colorIndex': c.colorIndex,
+            'note': c.note,
+            'semesterId': c.semesterId,
+          });
+        }
+
+        final slots = await timeSlotDao.getTimeSlotsForSemester(sem.id);
+        for (final s in slots) {
+          timeSlotList.add({
+            'index': s.index,
+            'startHour': s.startHour,
+            'startMinute': s.startMinute,
+            'endHour': s.endHour,
+            'endMinute': s.endMinute,
+            'semesterId': s.semesterId,
+          });
+        }
+      }
+
+      final exportData = {
+        'version': 1,
+        'exportDate': DateTime.now().toIso8601String(),
+        'semesters': semesterList,
+        'courses': courseList,
+        'timeSlots': timeSlotList,
+      };
+
+      final jsonStr = const JsonEncoder.withIndent('  ').convert(exportData);
+
+      // Write to temp file and share
+      final tempDir = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final file = File(p.join(tempDir.path, 'ddoge_export_$timestamp.json'));
+      await file.writeAsString(jsonStr);
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'DDoge 课程表数据导出',
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出失败: $e')),
+        );
+      }
+    }
+  }
+
+  /// 从 JSON 文件导入课程数据
+  Future<void> _importData(BuildContext context, WidgetRef ref) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final filePath = result.files.single.path;
+      if (filePath == null) return;
+
+      final jsonStr = await File(filePath).readAsString();
+      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+
+      // Validate version
+      final version = data['version'];
+      if (version == null || version is! int) {
+        throw Exception('无效的导出文件：缺少 version 字段');
+      }
+
+      final semesterList = data['semesters'] as List<dynamic>? ?? [];
+      final courseList = data['courses'] as List<dynamic>? ?? [];
+      final timeSlotList = data['timeSlots'] as List<dynamic>? ?? [];
+
+      // Show confirmation dialog
+      if (!context.mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('确认导入'),
+          content: Text(
+            '即将导入 ${semesterList.length} 个学期、'
+            '${courseList.length} 条课程记录、'
+            '${timeSlotList.length} 个节次时间配置。\n\n'
+            '已有数据将被覆盖（相同 ID 的记录），是否继续？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('导入'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) return;
+
+      final semesterDao = ref.read(semesterDaoProvider);
+      final courseDao = ref.read(courseDaoProvider);
+      final timeSlotDao = ref.read(timeSlotDaoProvider);
+
+      // Import semesters
+      for (final s in semesterList) {
+        final map = s as Map<String, dynamic>;
+        await semesterDao.upsertSemester(SemestersCompanion(
+          id: drift.Value(map['id'] as String),
+          name: drift.Value(map['name'] as String),
+          startDate: drift.Value(DateTime.parse(map['startDate'] as String)),
+          totalWeeks: drift.Value(map['totalWeeks'] as int),
+          isCurrent: drift.Value(map['isCurrent'] as bool? ?? false),
+        ));
+      }
+
+      // Import courses
+      for (final c in courseList) {
+        final map = c as Map<String, dynamic>;
+        await courseDao.upsertCourse(CoursesCompanion(
+          id: drift.Value(map['id'] as String),
+          name: drift.Value(map['name'] as String),
+          teacher: drift.Value(map['teacher'] as String? ?? ''),
+          classroom: drift.Value(map['classroom'] as String? ?? ''),
+          dayOfWeek: drift.Value(map['dayOfWeek'] as int),
+          startSlot: drift.Value(map['startSlot'] as int),
+          endSlot: drift.Value(map['endSlot'] as int),
+          startWeek: drift.Value(map['startWeek'] as int),
+          endWeek: drift.Value(map['endWeek'] as int),
+          weekType: drift.Value(map['weekType'] as int? ?? 0),
+          colorIndex: drift.Value(map['colorIndex'] as int? ?? 0),
+          note: drift.Value(map['note'] as String? ?? ''),
+          semesterId: drift.Value(map['semesterId'] as String),
+        ));
+      }
+
+      // Import time slots
+      for (final t in timeSlotList) {
+        final map = t as Map<String, dynamic>;
+        await timeSlotDao.updateTimeSlot(TimeSlotsCompanion(
+          index: drift.Value(map['index'] as int),
+          startHour: drift.Value(map['startHour'] as int),
+          startMinute: drift.Value(map['startMinute'] as int),
+          endHour: drift.Value(map['endHour'] as int),
+          endMinute: drift.Value(map['endMinute'] as int),
+          semesterId: drift.Value(map['semesterId'] as String),
+        ));
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '导入成功：${semesterList.length} 个学期、'
+              '${courseList.length} 条课程记录',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导入失败: $e')),
+        );
+      }
+    }
   }
 }
 

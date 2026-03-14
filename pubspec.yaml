@@ -1,7 +1,7 @@
 name: ddoge
 description: "DDoge 课程表 — 精美现代的多平台课程表应用"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.11.1
@@ -26,7 +26,10 @@ dependencies:
   # 网络与解析
   dio: ^5.8.0+1
   html: ^0.15.6
-  webview_flutter: ^4.10.0
+  flutter_inappwebview: ^6.1.5
+
+  # 分享
+  share_plus: ^10.1.4
 
   # 数据模型
   freezed_annotation: ^2.4.4

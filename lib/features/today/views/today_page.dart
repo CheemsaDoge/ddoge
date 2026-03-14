@@ -6,6 +6,8 @@ import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
 
 import 'package:ddoge/shared/widgets/glass_container.dart';
 
+import 'package:ddoge/core/router/app_router.dart';
+
 /// 今日课程页面
 ///
 /// 纵向时间轴展示当天课程，高亮当前/下一节课
@@ -64,7 +66,7 @@ class TodayPage extends ConsumerWidget {
                 child: _buildCourseTimeline(theme, todayCourses, timeSlots),
               ),
               // 留出底部导航栏空间
-              SizedBox(height: MediaQuery.of(context).padding.bottom + kBottomNavigationBarHeight),
+              SizedBox(height: MediaQuery.of(context).padding.bottom + kCustomNavBarHeight),
             ],
           );
         },

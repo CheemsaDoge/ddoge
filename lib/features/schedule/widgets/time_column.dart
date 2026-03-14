@@ -5,7 +5,7 @@ import 'package:ddoge/data/database/app_database.dart';
 
 /// 左侧时间列组件
 ///
-/// 显示每节课的序号、上课时间和下课时间
+/// 显示每节课的序号（上方）、上课时间和下课时间（下方）
 class TimeColumn extends StatelessWidget {
   const TimeColumn({
     super.key,
@@ -48,8 +48,7 @@ class TimeColumn extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (startTime.isNotEmpty)
-                  Text(startTime, style: timeStyle),
+                // 节次序号（上方）
                 Text(
                   '${index + 1}',
                   style: theme.textTheme.labelMedium?.copyWith(
@@ -57,8 +56,13 @@ class TimeColumn extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                if (endTime.isNotEmpty)
-                  Text(endTime, style: timeStyle),
+                // 开始时间与结束时间（下方，紧凑排列）
+                if (startTime.isNotEmpty && endTime.isNotEmpty)
+                  Text(
+                    '$startTime\n$endTime',
+                    textAlign: TextAlign.center,
+                    style: timeStyle?.copyWith(height: 1.2),
+                  ),
               ],
             ),
           );

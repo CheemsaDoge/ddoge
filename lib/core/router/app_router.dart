@@ -9,6 +9,7 @@ import 'package:ddoge/features/settings/views/settings_page.dart';
 import 'package:ddoge/features/settings/views/time_slot_settings_page.dart';
 import 'package:ddoge/features/settings/views/semester_settings_page.dart';
 import 'package:ddoge/features/settings/views/background_settings_page.dart';
+import 'package:ddoge/features/settings/views/personalization_settings_page.dart';
 import 'package:ddoge/features/import/views/import_page.dart';
 import 'package:ddoge/shared/widgets/glass_container.dart';
 import 'package:ddoge/shared/widgets/background_layer.dart';
@@ -80,6 +81,10 @@ final GoRouter appRouter = GoRouter(
                   path: 'background',
                   builder: (context, state) => const BackgroundSettingsPage(),
                 ),
+                GoRoute(
+                  path: 'personalization',
+                  builder: (context, state) => const PersonalizationSettingsPage(),
+                ),
               ],
             ),
           ],
@@ -149,6 +154,9 @@ Widget _slideUpTransition(
   );
 }
 
+/// 自定义导航栏高度（Material 3 默认 80 偏高）
+const kCustomNavBarHeight = 64.0;
+
 /// 底部导航壳组件
 class _MainShellScreen extends StatelessWidget {
   const _MainShellScreen({required this.navigationShell});
@@ -168,33 +176,36 @@ class _MainShellScreen extends StatelessWidget {
       bottomNavigationBar: GlassContainer(
         blur: 15.0,
         opacity: 0.5,
-        child: NavigationBar(
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          selectedIndex: navigationShell.currentIndex,
-          onDestinationSelected: (index) {
-            navigationShell.goBranch(
-              index,
-              initialLocation: index == navigationShell.currentIndex,
-            );
-          },
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.calendar_view_week_outlined),
-              selectedIcon: Icon(Icons.calendar_view_week),
-              label: '课表',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.today_outlined),
-              selectedIcon: Icon(Icons.today),
-              label: '今日',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings),
-              label: '设置',
-            ),
-          ],
+        child: SizedBox(
+          height: kCustomNavBarHeight + MediaQuery.of(context).padding.bottom,
+          child: NavigationBar(
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            selectedIndex: navigationShell.currentIndex,
+            onDestinationSelected: (index) {
+              navigationShell.goBranch(
+                index,
+                initialLocation: index == navigationShell.currentIndex,
+              );
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.calendar_view_week_outlined),
+                selectedIcon: Icon(Icons.calendar_view_week),
+                label: '课表',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.today_outlined),
+                selectedIcon: Icon(Icons.today),
+                label: '今日',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings),
+                label: '设置',
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:ddoge/core/constants/time_slots.dart';
 
 /// 顶部星期+日期头组件
+///
+/// 最左侧显示月份，右侧显示 7 天的星期和日期
 class WeekHeader extends StatelessWidget {
   const WeekHeader({
     super.key,
@@ -21,10 +23,34 @@ class WeekHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final today = DateTime.now();
 
+    // 取本周中间日期的月份作为显示月份
+    final midDate = dates.isNotEmpty && dates.length > 3 ? dates[3] : today;
+
     return Row(
       children: [
-        // 左侧时间列占位
-        const SizedBox(width: 40),
+        // 左侧月份指示器
+        SizedBox(
+          width: 40,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${midDate.month}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              Text(
+                '月',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontSize: 9,
+                  color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
         // 7天的头部
         ...List.generate(7, (index) {
           final date = index < dates.length ? dates[index] : null;
