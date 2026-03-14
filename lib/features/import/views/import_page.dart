@@ -3,20 +3,37 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:ddoge/features/import/parsers/uestc_eams_parser.dart';
+import 'package:ddoge/features/import/parsers/zhengfang_parser.dart';
+import 'package:ddoge/features/import/parsers/qiangzhi_parser.dart';
+import 'package:ddoge/features/import/parsers/urp_parser.dart';
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
 import 'package:ddoge/features/schedule/providers/database_providers.dart';
 import 'package:ddoge/data/database/app_database.dart';
 import 'package:drift/drift.dart' as drift;
 
-/// UESTC 教务系统导入页面
-class UestcEamsImportPage extends ConsumerStatefulWidget {
-  const UestcEamsImportPage({super.key});
+/// 教务系统类型
+enum SchoolSystem {
+  uestc(name: 'UESTC (EAMS)', url: 'https://eams.uestc.edu.cn/eams/courseTableForStd.action'),
+  zhengfang(name: '正方教务系统', url: ''),
+  qiangzhi(name: '强智教务系统', url: ''),
+  urp(name: 'URP 教务系统', url: '');
 
-  @override
-  ConsumerState<UestcEamsImportPage> createState() => _UestcEamsImportPageState();
+  final String name;
+  final String url;
+  const SchoolSystem({required this.name, required this.url});
 }
 
-class _UestcEamsImportPageState extends ConsumerState<UestcEamsImportPage> {
+/// 通用教务系统导入页面
+class ImportPage extends ConsumerStatefulWidget {
+  const ImportPage({super.key, required this.system});
+
+  final SchoolSystem system;
+
+  @override
+  ConsumerState<ImportPage> createState() => _ImportPageState();
+}
+
+class _ImportPageState extends ConsumerState<ImportPage> {
   late final WebViewController _controller;
   bool _isLoading = true;
   bool _canImport = false;
@@ -37,15 +54,35 @@ class _UestcEamsImportPageState extends ConsumerState<UestcEamsImportPage> {
           onPageFinished: (url) {
             setState(() {
               _isLoading = false;
-              // 检查是否在课表页面
-              if (url.contains('courseTableForStd!courseTable.action')) {
-                _canImport = true;
-              }
+              // 自动检测是否在课表页面
+              _checkCanImport(url);
             });
           },
         ),
-      )
-      ..loadRequest(Uri.parse('https://eams.uestc.edu.cn/eams/courseTableForStd.action'));
+      );
+    
+    if (widget.system.url.isNotEmpty) {
+      _controller.loadRequest(Uri.parse(widget.system.url));
+    }
+  }
+
+  void _checkCanImport(String url) {
+    bool can = false;
+    switch (widget.system) {
+      case SchoolSystem.uestc:
+        can = url.contains('courseTableForStd!courseTable.action');
+        break;
+      case SchoolSystem.zhengfang:
+        can = url.contains('xskbcx') || url.contains('xsgrkbcx'); // 正方课表页面关键词
+        break;
+      case SchoolSystem.qiangzhi:
+        can = url.contains('kbcx') || url.contains('KbSearch'); 
+        break;
+      case SchoolSystem.urp:
+        can = url.contains('kb') || url.contains('courseTable');
+        break;
+    }
+    setState(() => _canImport = can);
   }
 
   Future<void> _startImport() async {
@@ -54,7 +91,7 @@ class _UestcEamsImportPageState extends ConsumerState<UestcEamsImportPage> {
     
     if (semester == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先在设置中创建并选择一个学期')),
+        const SnackBar(content: Text('请先设置学期')),
       );
       return;
     }
@@ -62,13 +99,10 @@ class _UestcEamsImportPageState extends ConsumerState<UestcEamsImportPage> {
     setState(() => _isLoading = true);
 
     try {
-      // 抓取页面 HTML
       final html = await _controller.runJavaScriptReturningResult(
         "document.documentElement.outerHTML"
       ) as String;
       
-      // 注意：runJavaScriptReturningResult 返回的是 JSON 字符串，包含引号
-      // 简单处理：如果是字符串类型，去掉首尾引号并处理转义
       String decodedHtml = html;
       if (html.startsWith('"') && html.endsWith('"')) {
         decodedHtml = html.substring(1, html.length - 1)
@@ -78,26 +112,30 @@ class _UestcEamsImportPageState extends ConsumerState<UestcEamsImportPage> {
             .replaceAll(r'\t', '\t');
       }
 
-      final parser = UestcEamsParser();
-      final parsedCourses = parser.parse(decodedHtml, semester.id);
-
-      if (parsedCourses.isEmpty) {
-        throw Exception('未在页面中找到课程数据，请确保已点击“查询”并显示了课表');
+      List<Course> parsedCourses = [];
+      switch (widget.system) {
+        case SchoolSystem.uestc:
+          parsedCourses = UestcEamsParser().parse(decodedHtml, semester.id);
+          break;
+        case SchoolSystem.zhengfang:
+          parsedCourses = ZhengfangParser().parse(decodedHtml, semester.id);
+          break;
+        case SchoolSystem.qiangzhi:
+          parsedCourses = QiangzhiParser().parse(decodedHtml, semester.id);
+          break;
+        case SchoolSystem.urp:
+          parsedCourses = UrpParser().parse(decodedHtml, semester.id);
+          break;
       }
 
-      // 保存到数据库
+      if (parsedCourses.isEmpty) {
+        throw Exception('未找到课表数据，请确保已进入查询结果页面');
+      }
+
       final courseDao = ref.read(courseDaoProvider);
-      
-      // 为新导入的课程分配颜色索引
-      int colorIdx = 0;
-      final Set<String> courseNames = {};
-      
+      final Set<String> names = {};
       for (final c in parsedCourses) {
-        if (!courseNames.contains(c.name)) {
-          courseNames.add(c.name);
-          colorIdx++;
-        }
-        
+        if (!names.contains(c.name)) names.add(c.name);
         await courseDao.upsertCourse(CoursesCompanion(
           id: drift.Value(c.id),
           name: drift.Value(c.name),
@@ -109,21 +147,21 @@ class _UestcEamsImportPageState extends ConsumerState<UestcEamsImportPage> {
           startWeek: drift.Value(c.startWeek),
           endWeek: drift.Value(c.endWeek),
           weekType: drift.Value(c.weekType),
-          colorIndex: drift.Value(courseNames.length % 10), // 简单轮询颜色
+          colorIndex: drift.Value(names.length % 10),
           semesterId: drift.Value(semester.id),
         ));
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('成功导入 ${courseNames.length} 门课程')),
+          SnackBar(content: Text('导入成功：${names.length} 门课程')),
         );
         context.pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: ${e.toString()}')),
+          SnackBar(content: Text('导入失败: $e')),
         );
       }
     } finally {
@@ -135,7 +173,7 @@ class _UestcEamsImportPageState extends ConsumerState<UestcEamsImportPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('导入 UESTC 课表'),
+        title: Text('导入 ${widget.system.name}'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -145,25 +183,15 @@ class _UestcEamsImportPageState extends ConsumerState<UestcEamsImportPage> {
       ),
       body: Stack(
         children: [
-          WebViewWidget(controller: _controller),
+          if (widget.system.url.isEmpty)
+             _UrlInputView(onUrlSubmitted: (url) {
+               _controller.loadRequest(Uri.parse(url));
+             })
+          else
+            WebViewWidget(controller: _controller),
+            
           if (_isLoading)
             const Center(child: CircularProgressIndicator()),
-          if (!_isLoading && !_canImport)
-            Positioned(
-              bottom: 16,
-              left: 16,
-              right: 16,
-              child: Card(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text(
-                    '提示：请登录并进入“我的课表”页面，点击查询显示完整课表后，点击下方的“立即导入”按钮。',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
       floatingActionButton: _canImport
@@ -173,6 +201,52 @@ class _UestcEamsImportPageState extends ConsumerState<UestcEamsImportPage> {
               label: const Text('立即导入'),
             )
           : null,
+    );
+  }
+}
+
+class _UrlInputView extends StatefulWidget {
+  final Function(String) onUrlSubmitted;
+  const _UrlInputView({required this.onUrlSubmitted});
+  @override
+  State<_UrlInputView> createState() => _UrlInputViewState();
+}
+
+class _UrlInputViewState extends State<_UrlInputView> {
+  final _urlController = TextEditingController();
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.link, size: 64, color: Colors.grey),
+          const SizedBox(height: 24),
+          const Text('请输入您的教务系统网址', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Text('请确保输入的网址可以直接访问登录页面', style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 32),
+          TextField(
+            controller: _urlController,
+            decoration: const InputDecoration(
+              hintText: 'https://...',
+              border: OutlineInputBorder(),
+              labelText: '教务系统 URL',
+            ),
+            keyboardType: TextInputType.url,
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton(
+              onPressed: () => widget.onUrlSubmitted(_urlController.text),
+              child: const Text('进入系统'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

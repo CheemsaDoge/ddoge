@@ -192,10 +192,54 @@ class SettingsPage extends ConsumerWidget {
             children: [
               ListTile(
                 leading: const Icon(Icons.school_outlined),
-                title: const Text('从 UESTC 导入'),
-                subtitle: const Text('电子科技大学教务系统 (eams.uestc.edu.cn)'),
+                title: const Text('从教务系统导入'),
+                subtitle: const Text('支持 UESTC、正方、强智、URP 系统'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push(AppRoutes.uestcImport),
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (context) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ImportOption(
+                            icon: Icons.account_balance_outlined,
+                            title: 'UESTC (EAMS)',
+                            onTap: () {
+                              Navigator.pop(context);
+                              context.push('/import/uestc');
+                            },
+                          ),
+                          _ImportOption(
+                            icon: Icons.grid_view,
+                            title: '正方教务系统',
+                            onTap: () {
+                              Navigator.pop(context);
+                              context.push('/import/zhengfang');
+                            },
+                          ),
+                          _ImportOption(
+                            icon: Icons.bolt,
+                            title: '强智教务系统',
+                            onTap: () {
+                              Navigator.pop(context);
+                              context.push('/import/qiangzhi');
+                            },
+                          ),
+                          _ImportOption(
+                            icon: Icons.table_chart_outlined,
+                            title: 'URP 教务系统',
+                            onTap: () {
+                              Navigator.pop(context);
+                              context.push('/import/urp');
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
               ListTile(
                 leading: const Icon(Icons.file_download_outlined),
@@ -233,6 +277,28 @@ class SettingsPage extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 导入选项组件
+class _ImportOption extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  const _ImportOption({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      onTap: onTap,
     );
   }
 }

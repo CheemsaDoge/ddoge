@@ -103,9 +103,16 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: AppRoutes.uestcImport,
+      path: '/import/:system',
       parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) => const UestcEamsImportPage(),
+      builder: (context, state) {
+        final systemName = state.pathParameters['system']!;
+        final system = SchoolSystem.values.firstWhere(
+          (e) => e.name.toLowerCase().contains(systemName.toLowerCase()),
+          orElse: () => SchoolSystem.uestc,
+        );
+        return ImportPage(system: system);
+      },
     ),
   ],
 );
