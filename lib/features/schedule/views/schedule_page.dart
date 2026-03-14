@@ -30,6 +30,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
   /// 周切换 PageView 控制器
   PageController? _pageController;
+
   /// 标记是否正在由 PageView 滑动触发周数变化（避免循环更新）
   bool _isPageAnimating = false;
 
@@ -38,6 +39,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
   @override
   void dispose() {
+    ref.read(scheduleSelectionActiveProvider.notifier).state = false;
     _pageController?.dispose();
     super.dispose();
   }
@@ -60,6 +62,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(scheduleSelectionClearTriggerProvider, (previous, next) {
+      if (previous == next) return;
+      _clearSelection();
+    });
+
     final semesterAsync = ref.watch(currentSemesterProvider);
     final timeSlotsAsync = ref.watch(timeSlotsProvider);
     final selectedWeek = ref.watch(selectedWeekProvider);
@@ -71,6 +78,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final cardFontScale = ref.watch(cardFontScaleProvider);
     final showGrid = ref.watch(showGridLinesProvider);
     final showTimeLine = ref.watch(showTimeLineProvider);
+    final gridLineColorIndex = ref.watch(gridLineColorIndexProvider);
+    final gridLineWidth = ref.watch(gridLineWidthProvider);
+    final gridLineOpacity = ref.watch(gridLineOpacityProvider);
+    final gridLineDashed = ref.watch(gridLineDashedProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -79,11 +90,14 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         title: semesterAsync.when(
           data: (semester) {
             if (semester == null) {
-              return const Text('DDoge 课程表',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600));
+              return const Text(
+                'DDoge 课程表',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              );
             }
-            final currentWeek = app_date.DateUtils.currentWeekNumber(semester.startDate)
-                .clamp(1, semester.totalWeeks);
+            final currentWeek = app_date.DateUtils.currentWeekNumber(
+              semester.startDate,
+            ).clamp(1, semester.totalWeeks);
             final weekLabel = selectedWeek == currentWeek
                 ? '第$selectedWeek周'
                 : '第$selectedWeek周';
@@ -91,11 +105,17 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
               children: [
                 Text(
                   semester.name,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(12),
@@ -135,8 +155,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           }
 
           final totalWeeks = semester.totalWeeks;
-          final currentWeek =
-              app_date.DateUtils.currentWeekNumber(semester.startDate);
+          final currentWeek = app_date.DateUtils.currentWeekNumber(
+            semester.startDate,
+          );
           final timeSlots = timeSlotsAsync.valueOrNull ?? [];
           final coursesList = allCourses.valueOrNull ?? [];
 
@@ -145,7 +166,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           return Column(
             children: [
               // 留出 AppBar 的空间（因为 extendBodyBehindAppBar: true）
-              SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
+              SizedBox(
+                height: MediaQuery.of(context).padding.top + kToolbarHeight,
+              ),
               // 课程表网格（PageView 实现平滑滑动过渡）
               Expanded(
                 child: PageView.builder(
@@ -158,12 +181,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                   onPageChanged: (index) {
                     _isPageAnimating = true;
                     ref.read(selectedWeekProvider.notifier).state = index + 1;
-                    // 切换页面时清除选中状态
-                    setState(() {
-                      _selectedDay = null;
-                      _selectedStartSlot = null;
-                      _selectedEndSlot = null;
-                    });
+                    _clearSelection();
                     Future.microtask(() => _isPageAnimating = false);
                   },
                   itemBuilder: (context, index) {
@@ -194,9 +212,19 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                       cardFontScale: cardFontScale,
                       showGridLines: showGrid,
                       showTimeLine: showTimeLine,
-                      selectedDay: pageWeek == selectedWeek ? _selectedDay : null,
-                      selectedStartSlot: pageWeek == selectedWeek ? _selectedStartSlot : null,
-                      selectedEndSlot: pageWeek == selectedWeek ? _selectedEndSlot : null,
+                      gridLineColorIndex: gridLineColorIndex,
+                      gridLineWidth: gridLineWidth,
+                      gridLineOpacity: gridLineOpacity,
+                      gridLineDashed: gridLineDashed,
+                      selectedDay: pageWeek == selectedWeek
+                          ? _selectedDay
+                          : null,
+                      selectedStartSlot: pageWeek == selectedWeek
+                          ? _selectedStartSlot
+                          : null,
+                      selectedEndSlot: pageWeek == selectedWeek
+                          ? _selectedEndSlot
+                          : null,
                       onSlotTap: _onSlotTap,
                       gridKey: pageWeek == selectedWeek ? _gridKey : null,
                       onHandleDragUpdate: _onHandleDragUpdate,
@@ -205,23 +233,38 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                   },
                 ),
               ),
-              // 留出底部导航栏的空间（因为 extendBody: true 在 shell 中设置了）
-              SizedBox(height: MediaQuery.of(context).padding.bottom + kCustomNavBarHeight),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('加载失败: $error')),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: _selectedDay != null
-          ? FloatingActionButton.extended(
-              onPressed: _addCourseFromSelection,
-              icon: const Icon(Icons.add),
-              label: const Text('添加课程'),
+          ? Padding(
+              padding: EdgeInsets.only(
+                bottom:
+                    MediaQuery.of(context).padding.bottom +
+                    kCustomNavBarHeight +
+                    8,
+              ),
+              child: FloatingActionButton.extended(
+                onPressed: _addCourseFromSelection,
+                icon: const Icon(Icons.add),
+                label: const Text('添加课程'),
+              ),
             )
-          : FloatingActionButton(
-              onPressed: () => context.push(AppRoutes.courseAdd),
-              child: const Icon(Icons.add),
+          : Padding(
+              padding: EdgeInsets.only(
+                bottom:
+                    MediaQuery.of(context).padding.bottom +
+                    kCustomNavBarHeight +
+                    8,
+              ),
+              child: FloatingActionButton(
+                onPressed: () => context.push(AppRoutes.courseAdd),
+                child: const Icon(Icons.add),
+              ),
             ),
     );
   }
@@ -235,31 +278,60 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     return week;
   }
 
+  void _syncSelectionProvider() {
+    ref.read(scheduleSelectionActiveProvider.notifier).state =
+        _selectedDay != null;
+  }
+
+  void _replaceSelection({
+    int? day,
+    int? startSlot,
+    int? endSlot,
+    bool rebuild = true,
+  }) {
+    void apply() {
+      _selectedDay = day;
+      _selectedStartSlot = startSlot;
+      _selectedEndSlot = endSlot;
+    }
+
+    if (rebuild && mounted) {
+      setState(apply);
+    } else {
+      apply();
+    }
+    _syncSelectionProvider();
+  }
+
+  void _clearSelection() {
+    if (_selectedDay == null &&
+        _selectedStartSlot == null &&
+        _selectedEndSlot == null) {
+      return;
+    }
+    _replaceSelection();
+  }
+
   /// 点击空白格子
   void _onSlotTap(int day, int slot) {
-    setState(() {
-      if (_selectedDay == day &&
-          _selectedStartSlot == slot &&
-          _selectedEndSlot == slot) {
-        // 再次点击同一个选中格子 → 跳转添加课程
-        _addCourseFromSelection();
-        return;
-      }
-      // 选中格子
-      _selectedDay = day;
-      _selectedStartSlot = slot;
-      _selectedEndSlot = slot;
-    });
+    if (_selectedDay == day &&
+        _selectedStartSlot == slot &&
+        _selectedEndSlot == slot) {
+      _addCourseFromSelection();
+      return;
+    }
+    _replaceSelection(day: day, startSlot: slot, endSlot: slot);
   }
 
   /// 拖拽手柄更新：扩展选区到目标节次
   void _onHandleDragUpdate(int endSlot) {
     if (_selectedDay == null || _selectedStartSlot == null) return;
-    setState(() {
-      if (endSlot >= _selectedStartSlot!) {
-        _selectedEndSlot = endSlot;
-      }
-    });
+    if (endSlot < _selectedStartSlot!) return;
+    _replaceSelection(
+      day: _selectedDay,
+      startSlot: _selectedStartSlot,
+      endSlot: endSlot,
+    );
   }
 
   /// 拖拽手柄松开：跳转添加课程
@@ -274,18 +346,12 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final startSlot = _selectedStartSlot!;
     final endSlot = _selectedEndSlot ?? startSlot;
 
-    // 清除选中
-    setState(() {
-      _selectedDay = null;
-      _selectedStartSlot = null;
-      _selectedEndSlot = null;
-    });
+    _clearSelection();
 
-    context.push(AppRoutes.courseAdd, extra: {
-      'dayOfWeek': day,
-      'slot': startSlot,
-      'endSlot': endSlot,
-    });
+    context.push(
+      AppRoutes.courseAdd,
+      extra: {'dayOfWeek': day, 'slot': startSlot, 'endSlot': endSlot},
+    );
   }
 
   /// 空状态引导页
@@ -299,8 +365,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             Icon(
               Icons.school_outlined,
               size: 80,
-              color:
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 24),
             Text(
@@ -311,8 +378,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             Text(
               '请先设置学期信息，包括开学日期和总周数',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
@@ -343,6 +410,10 @@ class _ScheduleGrid extends StatelessWidget {
     this.cardFontScale = 1.0,
     this.showGridLines = true,
     this.showTimeLine = true,
+    this.gridLineColorIndex = 0,
+    this.gridLineWidth = 0.5,
+    this.gridLineOpacity = 0.3,
+    this.gridLineDashed = false,
     this.selectedDay,
     this.selectedStartSlot,
     this.selectedEndSlot,
@@ -364,6 +435,10 @@ class _ScheduleGrid extends StatelessWidget {
   final double cardFontScale;
   final bool showGridLines;
   final bool showTimeLine;
+  final int gridLineColorIndex;
+  final double gridLineWidth;
+  final double gridLineOpacity;
+  final bool gridLineDashed;
 
   // 格子选中回调
   final int? selectedDay;
@@ -378,8 +453,9 @@ class _ScheduleGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final slotCount =
-        timeSlots.isEmpty ? TimeSlotConstants.maxSlotsPerDay : timeSlots.length;
+    final slotCount = timeSlots.isEmpty
+        ? TimeSlotConstants.maxSlotsPerDay
+        : timeSlots.length;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -412,11 +488,30 @@ class _ScheduleGrid extends StatelessWidget {
             // 网格
             Expanded(
               child: autoFitHeight
-                  ? _buildGrid(context, slotCount, slotHeight, dayWidth,
-                      timeColumnWidth, todayIndex, gridHeight)
+                  ? _buildGrid(
+                      context,
+                      slotCount,
+                      slotHeight,
+                      dayWidth,
+                      timeColumnWidth,
+                      todayIndex,
+                      gridHeight,
+                    )
                   : SingleChildScrollView(
-                      child: _buildGrid(context, slotCount, slotHeight,
-                          dayWidth, timeColumnWidth, todayIndex, gridHeight),
+                      padding: EdgeInsets.only(
+                        bottom:
+                            MediaQuery.of(context).padding.bottom +
+                            kCustomNavBarHeight,
+                      ),
+                      child: _buildGrid(
+                        context,
+                        slotCount,
+                        slotHeight,
+                        dayWidth,
+                        timeColumnWidth,
+                        todayIndex,
+                        gridHeight,
+                      ),
                     ),
             ),
           ],
@@ -443,25 +538,37 @@ class _ScheduleGrid extends StatelessWidget {
           // 背景网格线
           if (showGridLines)
             _buildGridLines(
-                context, slotCount, slotHeight, dayWidth, timeColumnWidth),
+              context,
+              slotCount,
+              slotHeight,
+              dayWidth,
+              timeColumnWidth,
+            ),
           // 空白格子的点击区域
           ..._buildSlotHitAreas(
-              context, slotCount, slotHeight, dayWidth, timeColumnWidth),
+            context,
+            slotCount,
+            slotHeight,
+            dayWidth,
+            timeColumnWidth,
+          ),
           // 左侧时间列
           Positioned(
             left: 0,
             top: 0,
-            child: TimeColumn(
-              slotHeight: slotHeight,
-              timeSlots: timeSlots,
-            ),
+            child: TimeColumn(slotHeight: slotHeight, timeSlots: timeSlots),
           ),
           // 课程卡片
           ..._buildCourseCards(context, dayWidth, slotHeight, timeColumnWidth),
           // 选中高亮 + 拖拽手柄（渲染在课程卡片之上，避免被遮挡）
           if (selectedDay != null && selectedStartSlot != null)
             ..._buildSelectionOverlay(
-                context, slotCount, slotHeight, dayWidth, timeColumnWidth),
+              context,
+              slotCount,
+              slotHeight,
+              dayWidth,
+              timeColumnWidth,
+            ),
           // 当前时间线
           if (showTimeLine)
             CurrentTimeLine(
@@ -487,24 +594,27 @@ class _ScheduleGrid extends StatelessWidget {
     for (int day = 1; day <= 7; day++) {
       for (int slot = 1; slot <= slotCount; slot++) {
         // 跳过已有课程的格子
-        final hasCourse = courses.any((c) =>
-            c.dayOfWeek == day && slot >= c.startSlot && slot <= c.endSlot);
+        final hasCourse = courses.any(
+          (c) => c.dayOfWeek == day && slot >= c.startSlot && slot <= c.endSlot,
+        );
         if (hasCourse) continue;
 
         final left = timeColumnWidth + (day - 1) * dayWidth;
         final top = (slot - 1) * slotHeight;
 
-        areas.add(Positioned(
-          left: left,
-          top: top,
-          width: dayWidth,
-          height: slotHeight,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => onSlotTap?.call(day, slot),
-            child: const SizedBox.expand(),
+        areas.add(
+          Positioned(
+            left: left,
+            top: top,
+            width: dayWidth,
+            height: slotHeight,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onSlotTap?.call(day, slot),
+              child: const SizedBox.expand(),
+            ),
           ),
-        ));
+        );
       }
     }
     return areas;
@@ -528,86 +638,91 @@ class _ScheduleGrid extends StatelessWidget {
     final widgets = <Widget>[];
 
     // 主体高亮区域（不可交互，避免拦截点击事件）
-    widgets.add(Positioned(
-      left: left,
-      top: top,
-      width: dayWidth,
-      height: height,
-      child: IgnorePointer(
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          margin: const EdgeInsets.all(1),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: theme.colorScheme.primary.withValues(alpha: 0.5),
-              width: 1.5,
+    widgets.add(
+      Positioned(
+        left: left,
+        top: top,
+        width: dayWidth,
+        height: height,
+        child: IgnorePointer(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            margin: const EdgeInsets.all(1),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                width: 1.5,
+              ),
             ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add_circle_outline,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.add_circle_outline,
                   size: 18,
-                  color: theme.colorScheme.primary.withValues(alpha: 0.7)),
-              if (height > slotHeight * 1.5)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    '第$startSlot${endSlot > startSlot ? '-$endSlot' : ''}节',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color:
-                          theme.colorScheme.primary.withValues(alpha: 0.7),
-                      fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                ),
+                if (height > slotHeight * 1.5)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '第$startSlot${endSlot > startSlot ? '-$endSlot' : ''}节',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ));
+    );
 
     // 右侧拖拽手柄（可交互，放在格子外的右方）
     final handleWidth = 22.0;
     final handleTop = endSlot * slotHeight - slotHeight; // 手柄放在选区最后一格
-    widgets.add(Positioned(
-      left: left + dayWidth,
-      top: handleTop,
-      width: handleWidth,
-      height: slotHeight,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onVerticalDragUpdate: (details) {
-          // 通过 gridKey 将全局坐标转换为网格内局部坐标
-          final RenderBox? gridBox =
-              gridKey?.currentContext?.findRenderObject() as RenderBox?;
-          if (gridBox == null) return;
-          final localPos = gridBox.globalToLocal(details.globalPosition);
-          final targetSlot = (localPos.dy / slotHeight).floor() + 1;
-          final clamped = targetSlot.clamp(startSlot, slotCount);
-          onHandleDragUpdate?.call(clamped);
-        },
-        onVerticalDragEnd: (_) => onHandleDragEnd?.call(),
-        child: Center(
-          child: Container(
-            width: 18,
-            height: slotHeight - 4,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Icon(
-              Icons.drag_indicator,
-              size: 14,
-              color: theme.colorScheme.primary.withValues(alpha: 0.8),
+    widgets.add(
+      Positioned(
+        left: left + dayWidth,
+        top: handleTop,
+        width: handleWidth,
+        height: slotHeight,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onVerticalDragUpdate: (details) {
+            // 通过 gridKey 将全局坐标转换为网格内局部坐标
+            final RenderBox? gridBox =
+                gridKey?.currentContext?.findRenderObject() as RenderBox?;
+            if (gridBox == null) return;
+            final localPos = gridBox.globalToLocal(details.globalPosition);
+            final targetSlot = (localPos.dy / slotHeight).floor() + 1;
+            final clamped = targetSlot.clamp(startSlot, slotCount);
+            onHandleDragUpdate?.call(clamped);
+          },
+          onVerticalDragEnd: (_) => onHandleDragEnd?.call(),
+          child: Center(
+            child: Container(
+              width: 18,
+              height: slotHeight - 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Icon(
+                Icons.drag_indicator,
+                size: 14,
+                color: theme.colorScheme.primary.withValues(alpha: 0.8),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
 
     return widgets;
   }
@@ -620,22 +735,34 @@ class _ScheduleGrid extends StatelessWidget {
     double dayWidth,
     double timeColumnWidth,
   ) {
-    final color =
-        Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3);
+    final color = _resolveGridLineColor(
+      Theme.of(context),
+    ).withValues(alpha: gridLineOpacity);
 
     return CustomPaint(
-      size: Size(
-        timeColumnWidth + dayWidth * 7,
-        slotHeight * slotCount,
-      ),
+      size: Size(timeColumnWidth + dayWidth * 7, slotHeight * slotCount),
       painter: _GridPainter(
         slotCount: slotCount,
         slotHeight: slotHeight,
         dayWidth: dayWidth,
         timeColumnWidth: timeColumnWidth,
         lineColor: color,
+        lineWidth: gridLineWidth,
+        dashed: gridLineDashed,
       ),
     );
+  }
+
+  Color _resolveGridLineColor(ThemeData theme) {
+    final palette = <Color>[
+      theme.colorScheme.outlineVariant,
+      theme.colorScheme.primary,
+      theme.colorScheme.secondary,
+      theme.colorScheme.tertiary,
+      theme.colorScheme.onSurfaceVariant,
+      const Color(0xFF00ACC1),
+    ];
+    return palette[gridLineColorIndex.clamp(0, palette.length - 1)];
   }
 
   /// 构建课程卡片
@@ -692,16 +819,23 @@ class _ScheduleGrid extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             if (course.teacher.isNotEmpty)
-              _detailRow(
-                  Icons.person_outline, '教师', course.teacher, theme),
+              _detailRow(Icons.person_outline, '教师', course.teacher, theme),
             if (course.classroom.isNotEmpty)
-              _detailRow(Icons.location_on_outlined, '教室',
-                  course.classroom, theme),
+              _detailRow(
+                Icons.location_on_outlined,
+                '教室',
+                course.classroom,
+                theme,
+              ),
             _detailRow(
               Icons.calendar_today_outlined,
               '周次',
               '第${course.startWeek}-${course.endWeek}周'
-                  '${course.weekType == 1 ? '(单周)' : course.weekType == 2 ? '(双周)' : ''}',
+                  '${course.weekType == 1
+                      ? '(单周)'
+                      : course.weekType == 2
+                      ? '(双周)'
+                      : ''}',
               theme,
             ),
             _detailRow(
@@ -726,8 +860,7 @@ class _ScheduleGrid extends StatelessWidget {
                 FilledButton.tonal(
                   onPressed: () {
                     Navigator.pop(context);
-                    GoRouter.of(context)
-                        .push('/course/edit/${course.id}');
+                    GoRouter.of(context).push('/course/edit/${course.id}');
                   },
                   child: const Text('编辑'),
                 ),
@@ -740,7 +873,11 @@ class _ScheduleGrid extends StatelessWidget {
   }
 
   Widget _detailRow(
-      IconData icon, String label, String value, ThemeData theme) {
+    IconData icon,
+    String label,
+    String value,
+    ThemeData theme,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -753,12 +890,7 @@ class _ScheduleGrid extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium,
-            ),
-          ),
+          Expanded(child: Text(value, style: theme.textTheme.bodyMedium)),
         ],
       ),
     );
@@ -773,6 +905,8 @@ class _GridPainter extends CustomPainter {
     required this.dayWidth,
     required this.timeColumnWidth,
     required this.lineColor,
+    required this.lineWidth,
+    required this.dashed,
   });
 
   final int slotCount;
@@ -780,35 +914,62 @@ class _GridPainter extends CustomPainter {
   final double dayWidth;
   final double timeColumnWidth;
   final Color lineColor;
+  final double lineWidth;
+  final bool dashed;
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = lineColor
-      ..strokeWidth = 0.5;
+      ..strokeWidth = lineWidth;
 
     // 横线
     for (int i = 0; i <= slotCount; i++) {
       final y = i * slotHeight;
-      canvas.drawLine(
+      _drawLine(
+        canvas,
+        paint,
         Offset(timeColumnWidth, y),
         Offset(size.width, y),
-        paint,
       );
     }
 
     // 竖线
     for (int i = 0; i <= 7; i++) {
       final x = timeColumnWidth + i * dayWidth;
+      _drawLine(canvas, paint, Offset(x, 0), Offset(x, size.height));
+    }
+  }
+
+  void _drawLine(Canvas canvas, Paint paint, Offset start, Offset end) {
+    if (!dashed) {
+      canvas.drawLine(start, end, paint);
+      return;
+    }
+
+    final delta = end - start;
+    final distance = delta.distance;
+    if (distance == 0) return;
+
+    final direction = Offset(delta.dx / distance, delta.dy / distance);
+    const dashLength = 6.0;
+    const gapLength = 4.0;
+
+    double current = 0;
+    while (current < distance) {
+      final segmentEnd = (current + dashLength).clamp(0.0, distance);
       canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
+        start + direction * current,
+        start + direction * segmentEnd,
         paint,
       );
+      current += dashLength + gapLength;
     }
   }
 
   @override
   bool shouldRepaint(_GridPainter oldDelegate) =>
-      oldDelegate.lineColor != lineColor;
+      oldDelegate.lineColor != lineColor ||
+      oldDelegate.lineWidth != lineWidth ||
+      oldDelegate.dashed != dashed;
 }

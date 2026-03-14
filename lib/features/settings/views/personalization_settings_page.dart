@@ -11,6 +11,7 @@ class PersonalizationSettingsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settingsStorage = ref.read(settingsStorageProvider);
     final autoFit = ref.watch(autoFitHeightProvider);
     final fixedSlotHeight = ref.watch(fixedSlotHeightProvider);
     final cardRadius = ref.watch(cardBorderRadiusProvider);
@@ -18,6 +19,20 @@ class PersonalizationSettingsPage extends ConsumerWidget {
     final cardFontScale = ref.watch(cardFontScaleProvider);
     final showGrid = ref.watch(showGridLinesProvider);
     final showTimeLine = ref.watch(showTimeLineProvider);
+    final gridLineColorIndex = ref.watch(gridLineColorIndexProvider);
+    final gridLineWidth = ref.watch(gridLineWidthProvider);
+    final gridLineOpacity = ref.watch(gridLineOpacityProvider);
+    final gridLineDashed = ref.watch(gridLineDashedProvider);
+    final theme = Theme.of(context);
+    final gridColors = <Color>[
+      theme.colorScheme.outlineVariant,
+      theme.colorScheme.primary,
+      theme.colorScheme.secondary,
+      theme.colorScheme.tertiary,
+      theme.colorScheme.onSurfaceVariant,
+      const Color(0xFF00ACC1),
+    ];
+    const gridColorLabels = ['默认', '主色', '辅色', '强调', '灰色', '青色'];
 
     return Scaffold(
       appBar: AppBar(title: const Text('个性化')),
@@ -60,6 +75,89 @@ class PersonalizationSettingsPage extends ConsumerWidget {
                   ref.read(showGridLinesProvider.notifier).state = v;
                 },
               ),
+              if (showGrid) ...[
+                ListTile(
+                  leading: const Icon(Icons.color_lens_outlined),
+                  title: const Text('网格线颜色'),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: List.generate(gridColors.length, (index) {
+                        return ChoiceChip(
+                          label: Text(gridColorLabels[index]),
+                          selected: gridLineColorIndex == index,
+                          avatar: CircleAvatar(
+                            radius: 8,
+                            backgroundColor: gridColors[index],
+                          ),
+                          onSelected: (_) {
+                            ref
+                                    .read(gridLineColorIndexProvider.notifier)
+                                    .state =
+                                index;
+                            settingsStorage.setGridLineColorIndex(index);
+                          },
+                        );
+                      }),
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.line_weight),
+                  title: const Text('网格线粗细'),
+                  subtitle: Slider(
+                    value: gridLineWidth,
+                    min: 0.5,
+                    max: 2.0,
+                    divisions: 6,
+                    label: gridLineWidth.toStringAsFixed(1),
+                    onChanged: (v) {
+                      ref.read(gridLineWidthProvider.notifier).state = v;
+                      settingsStorage.setGridLineWidth(v);
+                    },
+                  ),
+                  trailing: Text(gridLineWidth.toStringAsFixed(1)),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.opacity),
+                  title: const Text('网格线透明度'),
+                  subtitle: Slider(
+                    value: gridLineOpacity,
+                    min: 0.1,
+                    max: 0.9,
+                    divisions: 8,
+                    label: '${(gridLineOpacity * 100).round()}%',
+                    onChanged: (v) {
+                      ref.read(gridLineOpacityProvider.notifier).state = v;
+                      settingsStorage.setGridLineOpacity(v);
+                    },
+                  ),
+                  trailing: Text('${(gridLineOpacity * 100).round()}%'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.border_style),
+                  title: const Text('网格线样式'),
+                  subtitle: const Text('在实线和虚线之间切换'),
+                  trailing: SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment<bool>(value: false, label: Text('实线')),
+                      ButtonSegment<bool>(value: true, label: Text('虚线')),
+                    ],
+                    selected: {gridLineDashed},
+                    onSelectionChanged: (selection) {
+                      final dashed = selection.first;
+                      ref.read(gridLineDashedProvider.notifier).state = dashed;
+                      settingsStorage.setGridLineDashed(dashed);
+                    },
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ),
+              ],
               SwitchListTile(
                 secondary: const Icon(Icons.timeline),
                 title: const Text('显示当前时间线'),
@@ -145,8 +243,8 @@ class _Section extends StatelessWidget {
           child: Text(
             title,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
         ),
         ...children,

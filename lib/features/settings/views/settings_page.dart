@@ -63,41 +63,83 @@ class SettingsPage extends ConsumerWidget {
           _SettingsSection(
             title: '课前提醒',
             children: [
-              ListTile(
-                leading: const Icon(Icons.notifications_outlined),
-                title: const Text('提醒时间'),
-                subtitle: Text(reminderMinutes == 0
-                    ? '已关闭'
-                    : '课前 $reminderMinutes 分钟提醒'),
-                trailing: SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 0, label: Text('关')),
-                    ButtonSegment(value: 5, label: Text('5m')),
-                    ButtonSegment(value: 15, label: Text('15m')),
-                    ButtonSegment(value: 30, label: Text('30m')),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.notifications_outlined),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '提醒时间',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                reminderMinutes == 0
+                                    ? '已关闭'
+                                    : '课前 $reminderMinutes 分钟提醒',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SegmentedButton<int>(
+                        segments: const [
+                          ButtonSegment(value: 0, label: Text('关')),
+                          ButtonSegment(value: 5, label: Text('5m')),
+                          ButtonSegment(value: 15, label: Text('15m')),
+                          ButtonSegment(value: 30, label: Text('30m')),
+                        ],
+                        selected: {reminderMinutes},
+                        onSelectionChanged: (v) async {
+                          final minutes = v.first;
+                          if (minutes > 0) {
+                            final granted = await NotificationService.instance
+                                .requestPermission();
+                            if (!granted) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('请授予通知权限以启用课前提醒'),
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+                          }
+                          ref.read(reminderMinutesProvider.notifier).state =
+                              minutes;
+                          ref
+                              .read(settingsStorageProvider)
+                              .setReminderMinutes(minutes);
+                        },
+                        style: ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ),
                   ],
-                  selected: {reminderMinutes},
-                  onSelectionChanged: (v) async {
-                    final minutes = v.first;
-                    if (minutes > 0) {
-                      final granted = await NotificationService.instance
-                          .requestPermission();
-                      if (!granted) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('请授予通知权限以启用课前提醒')),
-                          );
-                        }
-                        return;
-                      }
-                    }
-                    ref.read(reminderMinutesProvider.notifier).state = minutes;
-                    ref.read(settingsStorageProvider).setReminderMinutes(minutes);
-                  },
-                  style: ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
                 ),
               ),
             ],
@@ -223,9 +265,9 @@ class SettingsPage extends ConsumerWidget {
                 subtitle: const Text('手动更新桌面课表小组件'),
                 onTap: () {
                   ref.invalidate(reminderAutoScheduleProvider);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('桌面小组件已刷新')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('桌面小组件已刷新')));
                 },
               ),
             ],
@@ -258,9 +300,9 @@ class SettingsPage extends ConsumerWidget {
 
       if (semesters.isEmpty) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('没有数据可导出')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('没有数据可导出')));
         }
         return;
       }
@@ -327,15 +369,12 @@ class SettingsPage extends ConsumerWidget {
       final file = File(p.join(tempDir.path, 'ddoge_export_$timestamp.json'));
       await file.writeAsString(jsonStr);
 
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        subject: 'DDoge 课程表数据导出',
-      );
+      await Share.shareXFiles([XFile(file.path)], subject: 'DDoge 课程表数据导出');
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('导出失败: $e')));
       }
     }
   }
@@ -400,46 +439,52 @@ class SettingsPage extends ConsumerWidget {
       // Import semesters
       for (final s in semesterList) {
         final map = s as Map<String, dynamic>;
-        await semesterDao.upsertSemester(SemestersCompanion(
-          id: drift.Value(map['id'] as String),
-          name: drift.Value(map['name'] as String),
-          startDate: drift.Value(DateTime.parse(map['startDate'] as String)),
-          totalWeeks: drift.Value(map['totalWeeks'] as int),
-          isCurrent: drift.Value(map['isCurrent'] as bool? ?? false),
-        ));
+        await semesterDao.upsertSemester(
+          SemestersCompanion(
+            id: drift.Value(map['id'] as String),
+            name: drift.Value(map['name'] as String),
+            startDate: drift.Value(DateTime.parse(map['startDate'] as String)),
+            totalWeeks: drift.Value(map['totalWeeks'] as int),
+            isCurrent: drift.Value(map['isCurrent'] as bool? ?? false),
+          ),
+        );
       }
 
       // Import courses
       for (final c in courseList) {
         final map = c as Map<String, dynamic>;
-        await courseDao.upsertCourse(CoursesCompanion(
-          id: drift.Value(map['id'] as String),
-          name: drift.Value(map['name'] as String),
-          teacher: drift.Value(map['teacher'] as String? ?? ''),
-          classroom: drift.Value(map['classroom'] as String? ?? ''),
-          dayOfWeek: drift.Value(map['dayOfWeek'] as int),
-          startSlot: drift.Value(map['startSlot'] as int),
-          endSlot: drift.Value(map['endSlot'] as int),
-          startWeek: drift.Value(map['startWeek'] as int),
-          endWeek: drift.Value(map['endWeek'] as int),
-          weekType: drift.Value(map['weekType'] as int? ?? 0),
-          colorIndex: drift.Value(map['colorIndex'] as int? ?? 0),
-          note: drift.Value(map['note'] as String? ?? ''),
-          semesterId: drift.Value(map['semesterId'] as String),
-        ));
+        await courseDao.upsertCourse(
+          CoursesCompanion(
+            id: drift.Value(map['id'] as String),
+            name: drift.Value(map['name'] as String),
+            teacher: drift.Value(map['teacher'] as String? ?? ''),
+            classroom: drift.Value(map['classroom'] as String? ?? ''),
+            dayOfWeek: drift.Value(map['dayOfWeek'] as int),
+            startSlot: drift.Value(map['startSlot'] as int),
+            endSlot: drift.Value(map['endSlot'] as int),
+            startWeek: drift.Value(map['startWeek'] as int),
+            endWeek: drift.Value(map['endWeek'] as int),
+            weekType: drift.Value(map['weekType'] as int? ?? 0),
+            colorIndex: drift.Value(map['colorIndex'] as int? ?? 0),
+            note: drift.Value(map['note'] as String? ?? ''),
+            semesterId: drift.Value(map['semesterId'] as String),
+          ),
+        );
       }
 
       // Import time slots
       for (final t in timeSlotList) {
         final map = t as Map<String, dynamic>;
-        await timeSlotDao.updateTimeSlot(TimeSlotsCompanion(
-          index: drift.Value(map['index'] as int),
-          startHour: drift.Value(map['startHour'] as int),
-          startMinute: drift.Value(map['startMinute'] as int),
-          endHour: drift.Value(map['endHour'] as int),
-          endMinute: drift.Value(map['endMinute'] as int),
-          semesterId: drift.Value(map['semesterId'] as String),
-        ));
+        await timeSlotDao.updateTimeSlot(
+          TimeSlotsCompanion(
+            index: drift.Value(map['index'] as int),
+            startHour: drift.Value(map['startHour'] as int),
+            startMinute: drift.Value(map['startMinute'] as int),
+            endHour: drift.Value(map['endHour'] as int),
+            endMinute: drift.Value(map['endMinute'] as int),
+            semesterId: drift.Value(map['semesterId'] as String),
+          ),
+        );
       }
 
       if (context.mounted) {
@@ -454,9 +499,9 @@ class SettingsPage extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('导入失败: $e')));
       }
     }
   }
@@ -476,20 +521,13 @@ class _ImportOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      onTap: onTap,
-    );
+    return ListTile(leading: Icon(icon), title: Text(title), onTap: onTap);
   }
 }
 
 /// 设置分区组件
 class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({
-    required this.title,
-    required this.children,
-  });
+  const _SettingsSection({required this.title, required this.children});
 
   final String title;
   final List<Widget> children;
@@ -504,8 +542,8 @@ class _SettingsSection extends StatelessWidget {
           child: Text(
             title,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
         ),
         ...children,

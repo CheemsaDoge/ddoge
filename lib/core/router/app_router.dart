@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ddoge/features/schedule/views/schedule_page.dart';
+import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
 import 'package:ddoge/features/today/views/today_page.dart';
 import 'package:ddoge/features/course_editor/views/course_add_page.dart';
 import 'package:ddoge/features/course_editor/views/course_edit_page.dart';
@@ -83,7 +85,8 @@ final GoRouter appRouter = GoRouter(
                 ),
                 GoRoute(
                   path: 'personalization',
-                  builder: (context, state) => const PersonalizationSettingsPage(),
+                  builder: (context, state) =>
+                      const PersonalizationSettingsPage(),
                 ),
               ],
             ),
@@ -132,25 +135,15 @@ Widget _slideUpTransition(
   final offsetAnimation = Tween<Offset>(
     begin: const Offset(0, 0.15),
     end: Offset.zero,
-  ).animate(CurvedAnimation(
-    parent: animation,
-    curve: Curves.easeOutCubic,
-  ));
+  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
 
-  final fadeAnimation = Tween<double>(
-    begin: 0.0,
-    end: 1.0,
-  ).animate(CurvedAnimation(
-    parent: animation,
-    curve: const Interval(0.0, 0.6),
-  ));
+  final fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    CurvedAnimation(parent: animation, curve: const Interval(0.0, 0.6)),
+  );
 
   return FadeTransition(
     opacity: fadeAnimation,
-    child: SlideTransition(
-      position: offsetAnimation,
-      child: child,
-    ),
+    child: SlideTransition(position: offsetAnimation, child: child),
   );
 }
 
@@ -158,56 +151,93 @@ Widget _slideUpTransition(
 const kCustomNavBarHeight = 64.0;
 
 /// 底部导航壳组件
-class _MainShellScreen extends StatelessWidget {
+class _MainShellScreen extends ConsumerStatefulWidget {
   const _MainShellScreen({required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
+  ConsumerState<_MainShellScreen> createState() => _MainShellScreenState();
+}
+
+class _MainShellScreenState extends ConsumerState<_MainShellScreen> {
+  DateTime? _lastBackPress;
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBody: true, // 使 body 延伸到 NavigationBar 下方
-      body: Stack(
-        children: [
-          const BackgroundLayer(),
-          navigationShell,
-        ],
-      ),
-      bottomNavigationBar: GlassContainer(
-        blur: 15.0,
-        opacity: 0.5,
-        child: SizedBox(
-          height: kCustomNavBarHeight + MediaQuery.of(context).padding.bottom,
-          child: NavigationBar(
-            elevation: 0,
-            backgroundColor: Colors.transparent,
-            selectedIndex: navigationShell.currentIndex,
-            onDestinationSelected: (index) {
-              navigationShell.goBranch(
-                index,
-                initialLocation: index == navigationShell.currentIndex,
-              );
-            },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.calendar_view_week_outlined),
-                selectedIcon: Icon(Icons.calendar_view_week),
-                label: '课表',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.today_outlined),
-                selectedIcon: Icon(Icons.today),
-                label: '今日',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: '设置',
-              ),
-            ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        // 非课表 Tab → 切回课表
+        if (widget.navigationShell.currentIndex != 0) {
+          widget.navigationShell.goBranch(0, initialLocation: true);
+          return;
+        }
+        // 课表 Tab 有选中格子 → 优先取消选中
+        if (ref.read(scheduleSelectionActiveProvider)) {
+          ref.read(scheduleSelectionClearTriggerProvider.notifier).state++;
+          return;
+        }
+        // 课表 Tab → 双击退出
+        final now = DateTime.now();
+        if (_lastBackPress != null &&
+            now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
+          Navigator.of(context).pop();
+          return;
+        }
+        _lastBackPress = now;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('再按一次返回键退出'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      },
+      child: Scaffold(
+        extendBody: true, // 使 body 延伸到 NavigationBar 下方
+        body: Stack(
+          children: [const BackgroundLayer(), widget.navigationShell],
+        ),
+        bottomNavigationBar: GlassContainer(
+          blur: 15.0,
+          opacity: 0.5,
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom,
+            ),
+            child: NavigationBar(
+              height: kCustomNavBarHeight,
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              selectedIndex: widget.navigationShell.currentIndex,
+              onDestinationSelected: (index) {
+                widget.navigationShell.goBranch(
+                  index,
+                  initialLocation: index == widget.navigationShell.currentIndex,
+                );
+              },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.calendar_view_week_outlined),
+                  selectedIcon: Icon(Icons.calendar_view_week),
+                  label: '课表',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.today_outlined),
+                  selectedIcon: Icon(Icons.today),
+                  label: '今日',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: '设置',
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      ), // Scaffold
+    ); // PopScope
   }
 }

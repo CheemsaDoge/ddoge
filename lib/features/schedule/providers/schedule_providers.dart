@@ -32,8 +32,7 @@ final selectedWeekProvider = StateProvider<int>((ref) {
 });
 
 /// 当前学期的课程列表（响应式）
-final coursesForCurrentSemesterProvider =
-    StreamProvider<List<Course>>((ref) {
+final coursesForCurrentSemesterProvider = StreamProvider<List<Course>>((ref) {
   final semesterAsync = ref.watch(currentSemesterProvider);
   final semester = semesterAsync.valueOrNull;
   if (semester == null) return Stream.value([]);
@@ -55,6 +54,12 @@ final coursesForSelectedWeekProvider = Provider<List<Course>>((ref) {
     );
   }).toList();
 });
+
+/// 当前是否有课表格子选中
+final scheduleSelectionActiveProvider = StateProvider<bool>((ref) => false);
+
+/// 触发课表页面清除选中态
+final scheduleSelectionClearTriggerProvider = StateProvider<int>((ref) => 0);
 
 /// 当前学期的节次时间配置
 final timeSlotsProvider = StreamProvider<List<TimeSlot>>((ref) {
@@ -88,11 +93,33 @@ final showGridLinesProvider = StateProvider<bool>((ref) => true);
 /// 是否显示当前时间线
 final showTimeLineProvider = StateProvider<bool>((ref) => true);
 
+/// 网格线颜色索引（0=跟随主题, 1~N=预设颜色）
+final gridLineColorIndexProvider = StateProvider<int>((ref) {
+  return ref.read(settingsStorageProvider).getGridLineColorIndex();
+});
+
+/// 网格线粗细
+final gridLineWidthProvider = StateProvider<double>((ref) {
+  return ref.read(settingsStorageProvider).getGridLineWidth();
+});
+
+/// 网格线透明度
+final gridLineOpacityProvider = StateProvider<double>((ref) {
+  return ref.read(settingsStorageProvider).getGridLineOpacity();
+});
+
+/// 网格线样式（false=实线, true=虚线）
+final gridLineDashedProvider = StateProvider<bool>((ref) {
+  return ref.read(settingsStorageProvider).getGridLineDashed();
+});
+
 // ==================== SharedPreferences 与背景设置 ====================
 
 /// SharedPreferences 实例（在 main.dart 中通过 override 注入）
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('必须在 ProviderScope 中 override sharedPreferencesProvider');
+  throw UnimplementedError(
+    '必须在 ProviderScope 中 override sharedPreferencesProvider',
+  );
 });
 
 /// 设置存储服务

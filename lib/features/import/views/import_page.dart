@@ -50,6 +50,13 @@ class _ImportPageState extends ConsumerState<ImportPage> {
 
   // URL 已提交（用于非 UESTC 系统）
   bool _urlSubmitted = false;
+  String? _pendingUrl;
+
+  // 地址栏
+  final _urlBarController = TextEditingController();
+  String _currentUrl = '';
+  bool _canGoBack = false;
+  bool _canGoForward = false;
 
   // UESTC 专用状态
   _UestcState _uestcState = _UestcState.loading;
@@ -57,21 +64,19 @@ class _ImportPageState extends ConsumerState<ImportPage> {
   String? _uestcJsonResult;
 
   @override
+  void dispose() {
+    _urlBarController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isUestc = widget.system == SchoolSystem.uestc;
     final showWebView = widget.system.url.isNotEmpty || _urlSubmitted;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('导入 ${widget.system.name}'),
-        actions: [
-          if (showWebView)
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () => _controller?.reload(),
-            ),
-        ],
-      ),
+      appBar: AppBar(title: Text('导入 ${widget.system.name}')),
       body: Column(
         children: [
           // UESTC 进度状态条
@@ -85,7 +90,9 @@ class _ImportPageState extends ConsumerState<ImportPage> {
               child: Row(
                 children: [
                   if (_uestcState != _UestcState.done &&
-                      _uestcState != _UestcState.casLogin)
+                      _uestcState != _UestcState.casLogin &&
+                      _uestcState != _UestcState.eamsHome &&
+                      _uestcState != _UestcState.courseTablePage)
                     const Padding(
                       padding: EdgeInsets.only(right: 12),
                       child: SizedBox(
@@ -97,8 +104,11 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                   if (_uestcState == _UestcState.done)
                     const Padding(
                       padding: EdgeInsets.only(right: 12),
-                      child:
-                          Icon(Icons.check_circle, size: 18, color: Colors.green),
+                      child: Icon(
+                        Icons.check_circle,
+                        size: 18,
+                        color: Colors.green,
+                      ),
                     ),
                   Expanded(
                     child: Text(
@@ -122,13 +132,136 @@ class _ImportPageState extends ConsumerState<ImportPage> {
               color: Colors.orange.shade50,
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.orange.shade800),
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Colors.orange.shade800,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '请登录后导航到课表查询页面，然后点击下方「导入当前页面」按钮',
-                      style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange.shade800,
+                      ),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          // 地址栏 + 导航按钮
+          if (showWebView)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLow,
+                border: Border(
+                  bottom: BorderSide(
+                    color: theme.colorScheme.outlineVariant.withValues(
+                      alpha: 0.5,
+                    ),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  // 后退
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, size: 18),
+                    onPressed: _canGoBack ? () => _controller?.goBack() : null,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: '后退',
+                  ),
+                  // 前进
+                  IconButton(
+                    icon: const Icon(Icons.arrow_forward_ios, size: 18),
+                    onPressed: _canGoForward
+                        ? () => _controller?.goForward()
+                        : null,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: '前进',
+                  ),
+                  // URL 输入框
+                  Expanded(
+                    child: Container(
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(17),
+                      ),
+                      child: TextField(
+                        controller: _urlBarController,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          border: InputBorder.none,
+                          hintText: 'https://',
+                          hintStyle: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          prefixIcon: _isLoading
+                              ? const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.lock_outline,
+                                  size: 14,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                          prefixIconConstraints: const BoxConstraints(
+                            maxWidth: 30,
+                            maxHeight: 30,
+                          ),
+                        ),
+                        keyboardType: TextInputType.url,
+                        textInputAction: TextInputAction.go,
+                        onSubmitted: (url) {
+                          final trimmed = url.trim();
+                          if (trimmed.isNotEmpty) {
+                            var navigateUrl = trimmed;
+                            if (!navigateUrl.startsWith('http://') &&
+                                !navigateUrl.startsWith('https://')) {
+                              navigateUrl = 'https://$navigateUrl';
+                            }
+                            _controller?.loadUrl(
+                              urlRequest: URLRequest(url: WebUri(navigateUrl)),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  // 刷新
+                  IconButton(
+                    icon: Icon(
+                      _isLoading ? Icons.close : Icons.refresh,
+                      size: 18,
+                    ),
+                    onPressed: () {
+                      if (_isLoading) {
+                        _controller?.stopLoading();
+                      } else {
+                        _controller?.reload();
+                      }
+                    },
+                    visualDensity: VisualDensity.compact,
+                    tooltip: _isLoading ? '停止' : '刷新',
                   ),
                 ],
               ),
@@ -136,53 +269,76 @@ class _ImportPageState extends ConsumerState<ImportPage> {
           // WebView
           Expanded(
             child: !showWebView
-                ? _UrlInputView(onUrlSubmitted: (url) {
-                    setState(() => _urlSubmitted = true);
-                    // WebView will be created with this URL
-                    _pendingUrl = url;
-                  })
-                : Stack(
-                    children: [
-                      InAppWebView(
-                        initialUrlRequest: URLRequest(
-                          url: WebUri(
-                            _pendingUrl ?? widget.system.url,
-                          ),
-                        ),
-                        initialSettings: InAppWebViewSettings(
-                          javaScriptEnabled: true,
-                          cacheMode: CacheMode.LOAD_DEFAULT,
-                          domStorageEnabled: true,
-                          databaseEnabled: true,
-                          useOnLoadResource: false,
-                          mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
-                          allowContentAccess: true,
-                          allowFileAccess: true,
-                          userAgent:
-                              'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-                        ),
-                        onWebViewCreated: (controller) {
-                          _controller = controller;
-                        },
-                        onLoadStart: (controller, url) {
-                          setState(() => _isLoading = true);
-                        },
-                        onLoadStop: (controller, url) {
-                          setState(() => _isLoading = false);
-                          if (url != null) {
-                            final urlStr = url.toString();
-                            if (widget.system == SchoolSystem.uestc) {
-                              _handleUestcNavigation(urlStr);
+                ? _UrlInputView(
+                    onUrlSubmitted: (url) {
+                      setState(() => _urlSubmitted = true);
+                      _pendingUrl = url;
+                    },
+                  )
+                : InAppWebView(
+                    initialUrlRequest: URLRequest(
+                      url: WebUri(_pendingUrl ?? widget.system.url),
+                    ),
+                    initialSettings: InAppWebViewSettings(
+                      javaScriptEnabled: true,
+                      cacheMode: CacheMode.LOAD_DEFAULT,
+                      domStorageEnabled: true,
+                      databaseEnabled: true,
+                      useOnLoadResource: false,
+                      mixedContentMode:
+                          MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+                      allowContentAccess: true,
+                      allowFileAccess: true,
+                      userAgent:
+                          'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+                    ),
+                    onWebViewCreated: (controller) {
+                      _controller = controller;
+                    },
+                    onLoadStart: (controller, url) {
+                      setState(() {
+                        _isLoading = true;
+                        if (url != null) {
+                          _currentUrl = url.toString();
+                          _urlBarController.text = _currentUrl;
+                        }
+                      });
+                    },
+                    onLoadStop: (controller, url) async {
+                      final back = await controller.canGoBack();
+                      final forward = await controller.canGoForward();
+                      setState(() {
+                        _isLoading = false;
+                        _canGoBack = back;
+                        _canGoForward = forward;
+                        if (url != null) {
+                          _currentUrl = url.toString();
+                          _urlBarController.text = _currentUrl;
+                        }
+                      });
+                      if (url != null) {
+                        final urlStr = url.toString();
+                        if (widget.system == SchoolSystem.uestc) {
+                          _handleUestcNavigation(urlStr);
+                        }
+                      }
+                    },
+                    onUpdateVisitedHistory:
+                        (controller, url, androidIsReload) async {
+                          final back = await controller.canGoBack();
+                          final forward = await controller.canGoForward();
+                          setState(() {
+                            _canGoBack = back;
+                            _canGoForward = forward;
+                            if (url != null) {
+                              _currentUrl = url.toString();
+                              _urlBarController.text = _currentUrl;
                             }
-                          }
+                          });
                         },
-                        onReceivedError: (controller, request, error) {
-                          setState(() => _isLoading = false);
-                        },
-                      ),
-                      if (_isLoading)
-                        const Center(child: CircularProgressIndicator()),
-                    ],
+                    onReceivedError: (controller, request, error) {
+                      setState(() => _isLoading = false);
+                    },
                   ),
           ),
         ],
@@ -192,17 +348,11 @@ class _ImportPageState extends ConsumerState<ImportPage> {
           ? FloatingActionButton.extended(
               onPressed: _startImport,
               icon: const Icon(Icons.download),
-              label: Text(
-                isUestc && _uestcState == _UestcState.done
-                    ? '导入已提取数据'
-                    : '导入当前页面',
-              ),
+              label: const Text('导入当前页面'),
             )
           : null,
     );
   }
-
-  String? _pendingUrl;
 
   // ─── UESTC state machine ───
 
@@ -212,7 +362,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     if (lowerUrl.contains('idas.uestc.edu.cn')) {
       setState(() {
         _uestcState = _UestcState.casLogin;
-        _uestcStatusText = '请在页面中登录统一身份认证';
+        _uestcStatusText = '请先登录统一身份认证，登录后自行进入课表查询页';
       });
       return;
     }
@@ -222,37 +372,38 @@ class _ImportPageState extends ConsumerState<ImportPage> {
         RegExp(r'/eams/\?ticket=').hasMatch(lowerUrl)) {
       setState(() {
         _uestcState = _UestcState.eamsHome;
-        _uestcStatusText = '登录成功，正在跳转课表页...';
+        _uestcStatusText = '登录成功，请自行进入课表查询页';
       });
-      _uestcInjectNavigation();
       return;
     }
 
-    if (lowerUrl.contains('coursetableforstd.action') &&
-        !lowerUrl.contains('!coursetable')) {
+    if (_isUestcCourseTablePage(lowerUrl)) {
       setState(() {
         _uestcState = _UestcState.courseTablePage;
-        _uestcStatusText = '正在提取课表数据...';
+        _uestcStatusText = '已进入课表查询页，点击下方按钮导入当前页面';
+        _uestcJsonResult = null;
       });
-      _uestcExtractData();
       return;
     }
   }
 
-  Future<void> _uestcInjectNavigation() async {
-    await _controller?.evaluateJavascript(
-      source: "document.location = '/eams/courseTableForStd.action';",
-    );
+  bool _isUestcCourseTablePage(String url) {
+    final lowerUrl = url.toLowerCase();
+    return lowerUrl.contains('coursetableforstd.action') &&
+        !lowerUrl.contains('!coursetable');
   }
 
-  Future<void> _uestcExtractData() async {
-    setState(() {
-      _uestcState = _UestcState.extractingData;
-      _uestcStatusText = '正在查询课表...';
-    });
+  Future<String?> _uestcExtractData({bool updateStatus = true}) async {
+    if (updateStatus) {
+      setState(() {
+        _uestcState = _UestcState.extractingData;
+        _uestcStatusText = '正在提取课表数据...';
+      });
+    }
 
     try {
-      final result = await _controller?.evaluateJavascript(source: '''
+      final result = await _controller?.evaluateJavascript(
+        source: '''
 (function() {
   var idsMatch = document.body.innerHTML.match(/bg\\.form\\.addInput\\(form,"ids","(\\d+)"/);
   if (!idsMatch) return JSON.stringify({error: 'ids not found'});
@@ -293,29 +444,37 @@ class _ImportPageState extends ConsumerState<ImportPage> {
   }
   return JSON.stringify({courses: results, semesterId: semId});
 })()
-''');
+''',
+      );
 
       if (result == null) {
-        setState(() {
-          _uestcStatusText = '提取失败: JavaScript 返回 null';
-          _uestcState = _UestcState.courseTablePage;
-        });
-        return;
+        if (updateStatus) {
+          setState(() {
+            _uestcStatusText = '提取失败: 页面未返回课表数据';
+            _uestcState = _UestcState.courseTablePage;
+          });
+        }
+        return null;
       }
 
-      String jsonStr = result.toString();
-
-      setState(() {
-        _uestcState = _UestcState.done;
-        _uestcStatusText = '数据提取完成，请点击导入';
-      });
-
+      final jsonStr = result.toString();
       _uestcJsonResult = jsonStr;
+
+      if (updateStatus) {
+        setState(() {
+          _uestcState = _UestcState.done;
+          _uestcStatusText = '课表数据提取完成，正在导入';
+        });
+      }
+      return jsonStr;
     } catch (e) {
-      setState(() {
-        _uestcStatusText = '提取失败: $e';
-        _uestcState = _UestcState.courseTablePage;
-      });
+      if (updateStatus) {
+        setState(() {
+          _uestcStatusText = '提取失败: $e';
+          _uestcState = _UestcState.courseTablePage;
+        });
+      }
+      return null;
     }
   }
 
@@ -326,9 +485,9 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     final semester = semesterAsync.valueOrNull;
 
     if (semester == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先设置学期')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先设置学期')));
       return;
     }
 
@@ -338,6 +497,15 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       List<Course> parsedCourses = [];
 
       if (widget.system == SchoolSystem.uestc &&
+          _isUestcCourseTablePage(_currentUrl)) {
+        final extracted = await _uestcExtractData();
+        if (extracted != null) {
+          parsedCourses = UestcEamsParser().parseFromJson(
+            extracted,
+            semester.id,
+          );
+        }
+      } else if (widget.system == SchoolSystem.uestc &&
           _uestcJsonResult != null &&
           _uestcState == _UestcState.done) {
         // UESTC: parse from extracted JSON
@@ -381,35 +549,39 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       final Set<String> names = {};
       for (final c in parsedCourses) {
         if (!names.contains(c.name)) names.add(c.name);
-        await courseDao.upsertCourse(CoursesCompanion(
-          id: drift.Value(c.id),
-          name: drift.Value(c.name),
-          teacher: drift.Value(c.teacher),
-          classroom: drift.Value(c.classroom),
-          dayOfWeek: drift.Value(c.dayOfWeek),
-          startSlot: drift.Value(c.startSlot),
-          endSlot: drift.Value(c.endSlot),
-          startWeek: drift.Value(c.startWeek),
-          endWeek: drift.Value(c.endWeek),
-          weekType: drift.Value(c.weekType),
-          colorIndex: drift.Value(names.length % 10),
-          semesterId: drift.Value(semester.id),
-        ));
+        await courseDao.upsertCourse(
+          CoursesCompanion(
+            id: drift.Value(c.id),
+            name: drift.Value(c.name),
+            teacher: drift.Value(c.teacher),
+            classroom: drift.Value(c.classroom),
+            dayOfWeek: drift.Value(c.dayOfWeek),
+            startSlot: drift.Value(c.startSlot),
+            endSlot: drift.Value(c.endSlot),
+            startWeek: drift.Value(c.startWeek),
+            endWeek: drift.Value(c.endWeek),
+            weekType: drift.Value(c.weekType),
+            colorIndex: drift.Value(names.length % 10),
+            semesterId: drift.Value(semester.id),
+          ),
+        );
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  '导入成功：${names.length} 门课程，共 ${parsedCourses.length} 条记录')),
+            content: Text(
+              '导入成功：${names.length} 门课程，共 ${parsedCourses.length} 条记录',
+            ),
+          ),
         );
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('导入失败: $e')));
       }
     } finally {
       if (mounted) setState(() => _isImporting = false);
@@ -435,11 +607,15 @@ class _UrlInputViewState extends State<_UrlInputView> {
         children: [
           const Icon(Icons.link, size: 64, color: Colors.grey),
           const SizedBox(height: 24),
-          const Text('请输入您的教务系统网址',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            '请输入您的教务系统网址',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
-          const Text('请确保输入的网址可以直接访问登录页面',
-              style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const Text(
+            '请确保输入的网址可以直接访问登录页面',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
           const SizedBox(height: 32),
           TextField(
             controller: _urlController,
