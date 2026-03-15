@@ -14,6 +14,9 @@ import '../widgets/current_time_line.dart';
 
 import 'package:ddoge/shared/widgets/glass_container.dart';
 
+const _kScheduleAutoFitBottomGap = 12.0;
+const _kFloatingActionButtonBottomOffset = 36.0;
+
 /// 课程表周视图主页面
 class SchedulePage extends ConsumerStatefulWidget {
   const SchedulePage({super.key});
@@ -245,8 +248,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
               padding: EdgeInsets.only(
                 bottom:
                     MediaQuery.of(context).padding.bottom +
-                    kCustomNavBarHeight +
-                    8,
+                    _kFloatingActionButtonBottomOffset,
               ),
               child: FloatingActionButton(
                 onPressed: () => context.push(AppRoutes.courseAdd),
@@ -453,13 +455,11 @@ class _ScheduleGrid extends StatelessWidget {
         // 自适应高度：网格填满可用空间；固定高度：使用设置值
         final headerHeight = 36.0; // WeekHeader 高度
         final dividerHeight = 1.0;
-        final bottomOverlayHeight =
-            MediaQuery.of(context).padding.bottom + kCustomNavBarHeight;
         final availableHeight =
             (constraints.maxHeight -
                     headerHeight -
                     dividerHeight -
-                    (autoFitHeight ? bottomOverlayHeight : 0))
+                    (autoFitHeight ? _kScheduleAutoFitBottomGap : 0))
                 .clamp(0.0, double.infinity)
                 .toDouble();
         final slotHeight = autoFitHeight

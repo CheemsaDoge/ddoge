@@ -1,7 +1,10 @@
 import 'dart:convert';
+
 import 'package:html/parser.dart' as html_parser;
 import 'package:uuid/uuid.dart';
+
 import 'package:ddoge/data/database/app_database.dart';
+import 'package:ddoge/features/import/models/import_parse_result.dart';
 
 /// 电子科技大学 (UESTC) EAMS 教务系统解析器
 class UestcEamsParser {
@@ -10,203 +13,293 @@ class UestcEamsParser {
   /// 从 JS 注入返回的 JSON 解析课表
   /// JSON 格式: {"courses": [{ teacherName, courseFullName, roomName, weekBitmap, indices: [{day, slot}] }]}
   List<Course> parseFromJson(String jsonStr, String semesterId) {
-    final uuid = const Uuid();
-    final courses = <Course>[];
+    return parseImportResultFromJson(jsonStr, semesterId).courses;
+  }
 
+  ImportParseResult parseImportResultFromJson(
+    String jsonStr,
+    String semesterId,
+  ) {
+    final activities = <_ParsedActivity>[];
     final data = json.decode(jsonStr) as Map<String, dynamic>;
-    if (data.containsKey('error')) return courses;
+    if (data.containsKey('error')) {
+      return const ImportParseResult(courses: <Course>[]);
+    }
 
     final items = data['courses'] as List<dynamic>? ?? [];
-
     for (final item in items) {
       final teacher = (item['teacherName'] as String?) ?? '';
       final courseFullName = (item['courseFullName'] as String?) ?? '';
       final roomName = (item['roomName'] as String?) ?? '';
       final weekBitmap = (item['weekBitmap'] as String?) ?? '';
       final indices = (item['indices'] as List<dynamic>?) ?? [];
-
-      if (indices.isEmpty || weekBitmap.isEmpty) continue;
-
-      final weeks = _parseWeeks(weekBitmap);
-      if (weeks == null) continue;
-
-      // 课程名：去掉括号中的课程编号
-      var name = courseFullName;
-      final nameMatch = RegExp(r'^(.+?)\([A-Z]').firstMatch(courseFullName);
-      if (nameMatch != null) {
-        name = nameMatch.group(1)!;
+      if (indices.isEmpty || weekBitmap.isEmpty) {
+        continue;
       }
 
-      // 按天分组
+      final activeWeeks = _parseActiveWeeks(weekBitmap);
+      if (activeWeeks.isEmpty) {
+        continue;
+      }
+
       final dayToSlots = <int, List<int>>{};
       for (final idx in indices) {
-        final day = (idx['day'] as int) + 1; // 0-indexed → 1-indexed
-        final slot = (idx['slot'] as int) + 1;
+        final day = ((idx['day'] as int?) ?? 0) + 1;
+        final slot = ((idx['slot'] as int?) ?? 0) + 1;
         dayToSlots.putIfAbsent(day, () => []);
         dayToSlots[day]!.add(slot);
       }
 
-      dayToSlots.forEach((day, daySlots) {
-        daySlots.sort();
+      if (dayToSlots.isEmpty) {
+        continue;
+      }
 
-        // 合并连续节次
-        var start = daySlots[0];
-        var end = daySlots[0];
-
-        for (var j = 1; j < daySlots.length; j++) {
-          if (daySlots[j] == end + 1) {
-            end = daySlots[j];
-          } else {
-            courses.add(_createCourse(
-              name, teacher, roomName, day, start, end, weeks, semesterId, uuid,
-            ));
-            start = daySlots[j];
-            end = daySlots[j];
-          }
-        }
-        courses.add(_createCourse(
-          name, teacher, roomName, day, start, end, weeks, semesterId, uuid,
-        ));
-      });
+      activities.add(
+        _ParsedActivity(
+          teacher: teacher,
+          courseFullName: courseFullName,
+          classroom: roomName,
+          weekBitmap: weekBitmap,
+          activeWeeks: activeWeeks,
+          dayToSlots: dayToSlots,
+        ),
+      );
     }
 
-    return courses;
+    return _buildImportResult(activities, semesterId);
   }
 
   /// 解析课表 HTML（fallback）
   List<Course> parse(String html, String semesterId) {
+    return parseImportResult(html, semesterId).courses;
+  }
+
+  ImportParseResult parseImportResult(String html, String semesterId) {
     final document = html_parser.parse(html);
     final scripts = document.getElementsByTagName('script');
-
-    final courses = <Course>[];
-    final uuid = const Uuid();
+    final activities = <_ParsedActivity>[];
 
     for (final script in scripts) {
       final content = script.text;
-      if (content.contains('new TaskActivity')) {
-        courses.addAll(_parseScriptContent(content, semesterId, uuid));
+      if (!content.contains('new TaskActivity')) {
+        continue;
       }
+      activities.addAll(_parseScriptContent(content));
     }
 
-    return courses;
+    return _buildImportResult(activities, semesterId);
   }
 
-  List<Course> _parseScriptContent(String content, String semesterId, Uuid uuid) {
-    final courses = <Course>[];
+  ImportParseResult _buildImportResult(
+    List<_ParsedActivity> activities,
+    String semesterId,
+  ) {
+    if (activities.isEmpty) {
+      return const ImportParseResult(courses: <Course>[]);
+    }
 
+    final uuid = const Uuid();
+    final courses = <Course>[];
+    final normalizedWeekOffset = _detectWeekShift(activities);
+
+    for (final activity in activities) {
+      final normalizedWeeks = normalizedWeekOffset == 0
+          ? activity.activeWeeks
+          : activity.activeWeeks
+                .map((week) => week - normalizedWeekOffset)
+                .where((week) => week > 0)
+                .toList();
+      final weeks = _buildWeekInfo(normalizedWeeks);
+      if (weeks == null) {
+        continue;
+      }
+
+      activity.dayToSlots.forEach((day, daySlots) {
+        final sortedSlots = [...daySlots]..sort();
+        if (sortedSlots.isEmpty) {
+          return;
+        }
+
+        var start = sortedSlots.first;
+        var end = sortedSlots.first;
+
+        for (var index = 1; index < sortedSlots.length; index++) {
+          if (sortedSlots[index] == end + 1) {
+            end = sortedSlots[index];
+            continue;
+          }
+
+          courses.add(
+            _createCourse(
+              activity: activity,
+              day: day,
+              start: start,
+              end: end,
+              weeks: weeks,
+              semesterId: semesterId,
+              uuid: uuid,
+            ),
+          );
+          start = sortedSlots[index];
+          end = sortedSlots[index];
+        }
+
+        courses.add(
+          _createCourse(
+            activity: activity,
+            day: day,
+            start: start,
+            end: end,
+            weeks: weeks,
+            semesterId: semesterId,
+            uuid: uuid,
+          ),
+        );
+      });
+    }
+
+    return ImportParseResult(
+      courses: courses,
+      normalizedWeekOffset: normalizedWeekOffset,
+    );
+  }
+
+  List<_ParsedActivity> _parseScriptContent(String content) {
     final activityRegExp = RegExp(
       r'new TaskActivity\("([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)"\)',
     );
-    final indexRegExp = RegExp(r'index\s*=\s*(\d+)\s*\*\s*unitCount\s*\+\s*(\d+)');
+    final indexRegExp = RegExp(
+      r'index\s*=\s*(\d+)\s*\*\s*unitCount\s*\+\s*(\d+)',
+    );
 
     final lines = content.split('\n');
-
     _RawActivity? currentActivity;
-    final List<MapEntry<_RawActivity, _IndexPair>> activitySlots = [];
+    final activitySlots = <MapEntry<_RawActivity, _IndexPair>>[];
 
-    for (var i = 0; i < lines.length; i++) {
-      final line = lines[i].trim();
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
 
       final activityMatch = activityRegExp.firstMatch(line);
       if (activityMatch != null) {
         currentActivity = _RawActivity(
           teacher: activityMatch.group(2) ?? '',
-          name: activityMatch.group(4) ?? '',
+          courseFullName: activityMatch.group(4) ?? '',
           classroom: (activityMatch.group(6) ?? '').trim(),
           weekBitmap: activityMatch.group(7) ?? '',
         );
         continue;
       }
 
-      if (currentActivity != null) {
-        final indexMatch = indexRegExp.firstMatch(line);
-        if (indexMatch != null) {
-          final dayIndex = int.parse(indexMatch.group(1)!);
-          final slotIndex = int.parse(indexMatch.group(2)!);
-          activitySlots.add(MapEntry(currentActivity, _IndexPair(dayIndex, slotIndex)));
-        }
+      if (currentActivity == null) {
+        continue;
       }
+
+      final indexMatch = indexRegExp.firstMatch(line);
+      if (indexMatch == null) {
+        continue;
+      }
+
+      final dayIndex = int.parse(indexMatch.group(1)!);
+      final slotIndex = int.parse(indexMatch.group(2)!);
+      activitySlots.add(
+        MapEntry(currentActivity, _IndexPair(dayIndex, slotIndex)),
+      );
     }
 
-    // Group by activity
-    final Map<_RawActivity, List<_IndexPair>> grouped = {};
+    final groupedActivities = <_RawActivity, List<_IndexPair>>{};
     for (final entry in activitySlots) {
-      grouped.putIfAbsent(entry.key, () => []);
-      grouped[entry.key]!.add(entry.value);
+      groupedActivities.putIfAbsent(entry.key, () => []);
+      groupedActivities[entry.key]!.add(entry.value);
     }
 
-    grouped.forEach((raw, pairs) {
-      if (pairs.isEmpty) return;
-
-      final weeks = _parseWeeks(raw.weekBitmap);
-      if (weeks == null) return;
-
-      var name = raw.name;
-      final nameMatch = RegExp(r'^(.+?)\([A-Z]').firstMatch(raw.name);
-      if (nameMatch != null) {
-        name = nameMatch.group(1)!;
+    final parsedActivities = <_ParsedActivity>[];
+    groupedActivities.forEach((raw, pairs) {
+      final activeWeeks = _parseActiveWeeks(raw.weekBitmap);
+      if (pairs.isEmpty || activeWeeks.isEmpty) {
+        return;
       }
 
-      // Group by day
       final dayToSlots = <int, List<int>>{};
-      for (final p in pairs) {
-        final day = p.day + 1; // 0-indexed → 1-indexed
-        final slot = p.slot + 1;
+      for (final pair in pairs) {
+        final day = pair.day + 1;
+        final slot = pair.slot + 1;
         dayToSlots.putIfAbsent(day, () => []);
         dayToSlots[day]!.add(slot);
       }
 
-      dayToSlots.forEach((day, daySlots) {
-        daySlots.sort();
-        var start = daySlots[0];
-        var end = daySlots[0];
+      if (dayToSlots.isEmpty) {
+        return;
+      }
 
-        for (var j = 1; j < daySlots.length; j++) {
-          if (daySlots[j] == end + 1) {
-            end = daySlots[j];
-          } else {
-            courses.add(_createCourse(
-              name, raw.teacher, raw.classroom, day, start, end, weeks, semesterId, uuid,
-            ));
-            start = daySlots[j];
-            end = daySlots[j];
-          }
-        }
-        courses.add(_createCourse(
-          name, raw.teacher, raw.classroom, day, start, end, weeks, semesterId, uuid,
-        ));
-      });
+      parsedActivities.add(
+        _ParsedActivity(
+          teacher: raw.teacher,
+          courseFullName: raw.courseFullName,
+          classroom: raw.classroom,
+          weekBitmap: raw.weekBitmap,
+          activeWeeks: activeWeeks,
+          dayToSlots: dayToSlots,
+        ),
+      );
     });
 
-    return courses;
+    return parsedActivities;
   }
 
-  /// 解析周次位图 (如 "01111100...")
-  /// 位置 i 的 '1' 表示第 i+1 周有课（0-indexed bitmap → 1-indexed weeks）
-  _WeekInfo? _parseWeeks(String bitmap) {
-    if (bitmap.isEmpty) return null;
-
-    final activeWeeks = <int>[];
-    for (var i = 0; i < bitmap.length; i++) {
-      if (bitmap[i] == '1') {
-        activeWeeks.add(i + 1); // bitmap[0]='1' → week 1
-      }
+  List<int> _parseActiveWeeks(String bitmap) {
+    if (bitmap.isEmpty) {
+      return const [];
     }
 
-    if (activeWeeks.isEmpty) return null;
+    final activeWeeks = <int>[];
+    for (var index = 0; index < bitmap.length; index++) {
+      if (bitmap[index] == '1') {
+        activeWeeks.add(index + 1);
+      }
+    }
+    return activeWeeks;
+  }
 
-    final firstWeek = activeWeeks.first;
-    final lastWeek = activeWeeks.last;
+  int _detectWeekShift(List<_ParsedActivity> activities) {
+    final allWeeks = activities
+        .expand((activity) => activity.activeWeeks)
+        .toList();
+    if (allWeeks.isEmpty || allWeeks.contains(1)) {
+      return 0;
+    }
 
-    // 判断单双周：检查所有有课的周是否纯奇或纯偶
-    int weekType = 0; // 0=每周
-    if (activeWeeks.length > 1) {
-      final allOdd = activeWeeks.every((w) => w % 2 == 1);
-      final allEven = activeWeeks.every((w) => w % 2 == 0);
+    final minWeek = allWeeks.reduce(
+      (left, right) => left < right ? left : right,
+    );
+    if (minWeek != 2) {
+      return 0;
+    }
+
+    final weekTwoHitCount = activities
+        .where((activity) => activity.activeWeeks.contains(2))
+        .length;
+
+    // UESTC 常见情况是所有课程整体从第 2 周起，此时前移 1 周对齐本地学期周。
+    return weekTwoHitCount * 2 >= activities.length ? 1 : 0;
+  }
+
+  _WeekInfo? _buildWeekInfo(List<int> activeWeeks) {
+    if (activeWeeks.isEmpty) {
+      return null;
+    }
+
+    final sortedWeeks = [...activeWeeks]..sort();
+    final firstWeek = sortedWeeks.first;
+    final lastWeek = sortedWeeks.last;
+
+    var weekType = 0;
+    if (sortedWeeks.length > 1) {
+      final allOdd = sortedWeeks.every((week) => week.isOdd);
+      final allEven = sortedWeeks.every((week) => week.isEven);
       if (allOdd) {
-        weekType = 1; // 单周
+        weekType = 1;
       } else if (allEven) {
-        weekType = 2; // 双周
+        weekType = 2;
       }
     }
 
@@ -217,22 +310,24 @@ class UestcEamsParser {
     );
   }
 
-  Course _createCourse(
-    String name,
-    String teacher,
-    String classroom,
-    int day,
-    int start,
-    int end,
-    _WeekInfo weeks,
-    String semesterId,
-    Uuid uuid,
-  ) {
+  Course _createCourse({
+    required _ParsedActivity activity,
+    required int day,
+    required int start,
+    required int end,
+    required _WeekInfo weeks,
+    required String semesterId,
+    required Uuid uuid,
+  }) {
     return Course(
-      id: uuid.v5(_uuidNamespace, '$name-$day-$start-${weeks.startWeek}-$semesterId'),
-      name: name,
-      teacher: teacher,
-      classroom: classroom,
+      id: uuid.v5(
+        _uuidNamespace,
+        '${activity.courseFullName}|${activity.teacher}|${activity.classroom}|'
+        '$day|$start|$end|${activity.weekBitmap}|$semesterId',
+      ),
+      name: activity.displayName,
+      teacher: activity.teacher,
+      classroom: activity.classroom,
       dayOfWeek: day,
       startSlot: start,
       endSlot: end,
@@ -246,48 +341,76 @@ class UestcEamsParser {
   }
 }
 
-class _RawActivity {
+class _ParsedActivity {
+  const _ParsedActivity({
+    required this.teacher,
+    required this.courseFullName,
+    required this.classroom,
+    required this.weekBitmap,
+    required this.activeWeeks,
+    required this.dayToSlots,
+  });
+
   final String teacher;
-  final String name;
+  final String courseFullName;
   final String classroom;
   final String weekBitmap;
+  final List<int> activeWeeks;
+  final Map<int, List<int>> dayToSlots;
 
-  _RawActivity({
+  String get displayName {
+    final match = RegExp(r'^(.+?)\([A-Z]').firstMatch(courseFullName);
+    return match?.group(1) ?? courseFullName;
+  }
+}
+
+class _RawActivity {
+  const _RawActivity({
     required this.teacher,
-    required this.name,
+    required this.courseFullName,
     required this.classroom,
     required this.weekBitmap,
   });
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is _RawActivity &&
-          runtimeType == other.runtimeType &&
-          teacher == other.teacher &&
-          name == other.name &&
-          classroom == other.classroom &&
-          weekBitmap == other.weekBitmap;
+  final String teacher;
+  final String courseFullName;
+  final String classroom;
+  final String weekBitmap;
 
   @override
-  int get hashCode =>
-      teacher.hashCode ^ name.hashCode ^ classroom.hashCode ^ weekBitmap.hashCode;
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is _RawActivity &&
+            teacher == other.teacher &&
+            courseFullName == other.courseFullName &&
+            classroom == other.classroom &&
+            weekBitmap == other.weekBitmap;
+  }
+
+  @override
+  int get hashCode {
+    return teacher.hashCode ^
+        courseFullName.hashCode ^
+        classroom.hashCode ^
+        weekBitmap.hashCode;
+  }
 }
 
 class _IndexPair {
+  const _IndexPair(this.day, this.slot);
+
   final int day;
   final int slot;
-  _IndexPair(this.day, this.slot);
 }
 
 class _WeekInfo {
-  final int startWeek;
-  final int endWeek;
-  final int weekType;
-
-  _WeekInfo({
+  const _WeekInfo({
     required this.startWeek,
     required this.endWeek,
     required this.weekType,
   });
+
+  final int startWeek;
+  final int endWeek;
+  final int weekType;
 }

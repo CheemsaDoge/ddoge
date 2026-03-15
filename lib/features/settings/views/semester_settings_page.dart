@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:ddoge/core/router/app_router.dart';
+import 'package:ddoge/core/models/time_slot_template.dart';
 import 'package:ddoge/data/database/app_database.dart';
 import 'package:ddoge/features/schedule/providers/database_providers.dart';
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
+import 'package:ddoge/features/settings/widgets/settings_subpage_scaffold.dart';
 
 /// 学期设置页面
 class SemesterSettingsPage extends ConsumerStatefulWidget {
@@ -37,15 +38,15 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
     // 监听当前学期以确保状态同步
     ref.watch(currentSemesterProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('学期管理')),
-      body: semestersAsync.when(
+    return SettingsSubpageScaffold(
+      title: '学期管理',
+      child: semestersAsync.when(
         data: (semesters) => ListView(
           padding: EdgeInsets.fromLTRB(
             16,
             16,
             16,
-            MediaQuery.of(context).padding.bottom + kCustomNavBarHeight + 16,
+            settingsSubpageBottomPadding(context),
           ),
           children: [
             // 已有学期列表
@@ -215,6 +216,7 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
 
     final semesterDao = ref.read(semesterDaoProvider);
     final timeSlotDao = ref.read(timeSlotDaoProvider);
+    final settingsStorage = ref.read(settingsStorageProvider);
     final id = _editingSemesterId ?? const Uuid().v4();
     final isFirst = (ref.read(allSemestersProvider).valueOrNull ?? []).isEmpty;
 
@@ -231,6 +233,10 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
     // 如果是新学期，初始化默认节次时间
     if (!_isEditing) {
       await timeSlotDao.initDefaultTimeSlots(id);
+      await settingsStorage.setSemesterTimeSlotTemplateId(
+        id,
+        TimeSlotTemplate.defaultTemplateId,
+      );
       // 如果是第一个学期，设置为当前
       if (isFirst) {
         await semesterDao.setCurrentSemester(id);
@@ -277,6 +283,9 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
     if (confirm == true) {
       await ref.read(courseDaoProvider).deleteCoursesForSemester(id);
       await ref.read(timeSlotDaoProvider).deleteTimeSlotsForSemester(id);
+      await ref
+          .read(settingsStorageProvider)
+          .setSemesterTimeSlotTemplateId(id, null);
       await ref.read(semesterDaoProvider).deleteSemester(id);
     }
   }

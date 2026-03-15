@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:drift/drift.dart' as drift;
 
+import 'package:ddoge/core/models/time_slot_template.dart';
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
 import 'package:ddoge/features/schedule/providers/database_providers.dart';
 import 'package:ddoge/features/notification/providers/notification_providers.dart';
@@ -192,7 +193,7 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('DDoge 课程表'),
-                subtitle: const Text('版本 1.1.4'),
+                subtitle: const Text('版本 1.2.0 beta'),
               ),
             ],
           ),
@@ -275,6 +276,7 @@ class SettingsPage extends ConsumerWidget {
         settingsStorage,
         includeReminderSettings: exportOptions.includeReminderSettings,
         includeDisplaySettings: exportOptions.includeDisplaySettings,
+        includeTimeSlotTemplates: exportOptions.includeTimeSlots,
       );
 
       if (semesterList.isEmpty &&
@@ -454,6 +456,7 @@ class SettingsPage extends ConsumerWidget {
     SettingsStorage storage, {
     required bool includeReminderSettings,
     required bool includeDisplaySettings,
+    required bool includeTimeSlotTemplates,
   }) {
     final data = <String, dynamic>{};
 
@@ -482,6 +485,20 @@ class SettingsPage extends ConsumerWidget {
       });
     }
 
+    if (includeTimeSlotTemplates) {
+      final customTemplates = storage.getCustomTimeSlotTemplates();
+      final semesterTemplateBindings = storage
+          .getSemesterTimeSlotTemplateBindings();
+      if (customTemplates.isNotEmpty) {
+        data['timeSlotTemplates'] = customTemplates
+            .map((template) => template.toJson())
+            .toList();
+      }
+      if (semesterTemplateBindings.isNotEmpty) {
+        data['semesterTimeSlotTemplateBindings'] = semesterTemplateBindings;
+      }
+    }
+
     return data;
   }
 
@@ -490,6 +507,28 @@ class SettingsPage extends ConsumerWidget {
     Map<String, dynamic> settingsMap,
   ) async {
     final storage = ref.read(settingsStorageProvider);
+
+    final timeSlotTemplates =
+        settingsMap['timeSlotTemplates'] as List<dynamic>?;
+    if (timeSlotTemplates != null) {
+      for (final item in timeSlotTemplates) {
+        await storage.upsertTimeSlotTemplate(
+          TimeSlotTemplate.fromJson(item as Map<String, dynamic>),
+        );
+      }
+    }
+
+    final semesterTemplateBindings =
+        settingsMap['semesterTimeSlotTemplateBindings']
+            as Map<String, dynamic>?;
+    if (semesterTemplateBindings != null) {
+      for (final entry in semesterTemplateBindings.entries) {
+        await storage.setSemesterTimeSlotTemplateId(
+          entry.key,
+          entry.value.toString(),
+        );
+      }
+    }
 
     final themeMode = (settingsMap['themeMode'] as num?)?.toInt();
     if (themeMode != null) {

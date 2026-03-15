@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../../core/models/time_slot_template.dart';
 import '../app_database.dart';
 import '../tables/tables.dart';
 import '../../../core/constants/time_slots.dart' as constants;
@@ -54,10 +55,41 @@ class TimeSlotDao extends DatabaseAccessor<AppDatabase>
     return into(timeSlots).insertOnConflictUpdate(slot);
   }
 
+  /// 使用模板整体替换某学期的节次时间
+  Future<void> replaceTimeSlotsForSemester(
+    String semesterId,
+    Iterable<TimeSlotTemplateSlot> slots,
+  ) async {
+    final normalizedSlots = slots.toList()
+      ..sort((left, right) => left.index.compareTo(right.index));
+
+    await transaction(() async {
+      await deleteTimeSlotsForSemester(semesterId);
+      if (normalizedSlots.isEmpty) {
+        return;
+      }
+      await batch((batch) {
+        batch.insertAll(
+          timeSlots,
+          normalizedSlots.map(
+            (slot) => TimeSlotsCompanion.insert(
+              index: slot.index,
+              startHour: slot.startHour,
+              startMinute: slot.startMinute,
+              endHour: slot.endHour,
+              endMinute: slot.endMinute,
+              semesterId: semesterId,
+            ),
+          ),
+        );
+      });
+    });
+  }
+
   /// 删除指定学期的所有节次时间
   Future<int> deleteTimeSlotsForSemester(String semesterId) {
-    return (delete(timeSlots)
-          ..where((t) => t.semesterId.equals(semesterId)))
-        .go();
+    return (delete(
+      timeSlots,
+    )..where((t) => t.semesterId.equals(semesterId))).go();
   }
 }

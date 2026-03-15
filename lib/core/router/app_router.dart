@@ -34,6 +34,9 @@ class AppRoutes {
 /// 底部导航壳页面的 Key，用于从外部控制导航切换
 final shellNavigatorKey = GlobalKey<NavigatorState>();
 final rootNavigatorKey = GlobalKey<NavigatorState>();
+final scheduleBranchNavigatorKey = GlobalKey<NavigatorState>();
+final todayBranchNavigatorKey = GlobalKey<NavigatorState>();
+final settingsBranchNavigatorKey = GlobalKey<NavigatorState>();
 
 /// GoRouter 路由配置
 final GoRouter appRouter = GoRouter(
@@ -48,6 +51,7 @@ final GoRouter appRouter = GoRouter(
       branches: [
         // 课表 Tab
         StatefulShellBranch(
+          navigatorKey: scheduleBranchNavigatorKey,
           routes: [
             GoRoute(
               path: AppRoutes.schedule,
@@ -57,6 +61,7 @@ final GoRouter appRouter = GoRouter(
         ),
         // 今日 Tab
         StatefulShellBranch(
+          navigatorKey: todayBranchNavigatorKey,
           routes: [
             GoRoute(
               path: AppRoutes.today,
@@ -66,6 +71,7 @@ final GoRouter appRouter = GoRouter(
         ),
         // 设置 Tab
         StatefulShellBranch(
+          navigatorKey: settingsBranchNavigatorKey,
           routes: [
             GoRoute(
               path: AppRoutes.settings,
@@ -174,12 +180,29 @@ class _MainShellScreen extends ConsumerStatefulWidget {
 class _MainShellScreenState extends ConsumerState<_MainShellScreen> {
   DateTime? _lastBackPress;
 
+  NavigatorState? _currentBranchNavigator() {
+    switch (widget.navigationShell.currentIndex) {
+      case 0:
+        return scheduleBranchNavigatorKey.currentState;
+      case 1:
+        return todayBranchNavigatorKey.currentState;
+      case 2:
+        return settingsBranchNavigatorKey.currentState;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
+        final currentBranchNavigator = _currentBranchNavigator();
+        if (currentBranchNavigator?.canPop() ?? false) {
+          currentBranchNavigator!.pop();
+          return;
+        }
         // 非课表 Tab → 切回课表
         if (widget.navigationShell.currentIndex != 0) {
           widget.navigationShell.goBranch(0, initialLocation: true);

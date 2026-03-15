@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:ddoge/core/models/time_slot_template.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 背景类型枚举
@@ -37,6 +40,9 @@ class SettingsStorage {
   static const _keyGridLineWidth = 'grid_line_width';
   static const _keyGridLineOpacity = 'grid_line_opacity';
   static const _keyGridLineDashed = 'grid_line_dashed';
+  static const _keyTimeSlotTemplates = 'time_slot_templates';
+  static const _keySemesterTimeSlotTemplateBindings =
+      'semester_time_slot_template_bindings';
 
   // 背景类型
   BackgroundType getBackgroundType() {
@@ -197,5 +203,125 @@ class SettingsStorage {
 
   Future<void> setGridLineDashed(bool dashed) async {
     await _prefs.setBool(_keyGridLineDashed, dashed);
+  }
+
+  List<TimeSlotTemplate> getTimeSlotTemplates() {
+    final templates = <String, TimeSlotTemplate>{
+      for (final template in TimeSlotTemplate.builtInTemplates)
+        template.id: template,
+    };
+    for (final template in getCustomTimeSlotTemplates()) {
+      templates[template.id] = template.copyWith(isBuiltin: false);
+    }
+    return templates.values.toList();
+  }
+
+  List<TimeSlotTemplate> getCustomTimeSlotTemplates() {
+    final rawJson = _prefs.getString(_keyTimeSlotTemplates);
+    if (rawJson == null || rawJson.isEmpty) {
+      return const [];
+    }
+
+    try {
+      final decoded = jsonDecode(rawJson) as List<dynamic>;
+      return decoded.map((item) {
+        final template = TimeSlotTemplate.fromJson(
+          item as Map<String, dynamic>,
+        );
+        return template.copyWith(isBuiltin: false);
+      }).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  TimeSlotTemplate? getTimeSlotTemplateById(String templateId) {
+    for (final template in getTimeSlotTemplates()) {
+      if (template.id == templateId) {
+        return template;
+      }
+    }
+    return null;
+  }
+
+  Future<void> upsertTimeSlotTemplate(TimeSlotTemplate template) async {
+    if (template.isBuiltin) {
+      return;
+    }
+
+    final templates = getCustomTimeSlotTemplates();
+    final normalizedTemplate = template.copyWith(isBuiltin: false);
+    final existingIndex = templates.indexWhere(
+      (current) => current.id == normalizedTemplate.id,
+    );
+    if (existingIndex >= 0) {
+      templates[existingIndex] = normalizedTemplate;
+    } else {
+      templates.add(normalizedTemplate);
+    }
+
+    await _prefs.setString(
+      _keyTimeSlotTemplates,
+      jsonEncode(templates.map((item) => item.toJson()).toList()),
+    );
+  }
+
+  Future<void> deleteTimeSlotTemplate(String templateId) async {
+    if (templateId.startsWith('builtin.')) {
+      return;
+    }
+
+    final templates = getCustomTimeSlotTemplates()
+      ..removeWhere((template) => template.id == templateId);
+    await _prefs.setString(
+      _keyTimeSlotTemplates,
+      jsonEncode(templates.map((item) => item.toJson()).toList()),
+    );
+
+    final bindings = getSemesterTimeSlotTemplateBindings();
+    bindings.removeWhere((_, value) => value == templateId);
+    await _prefs.setString(
+      _keySemesterTimeSlotTemplateBindings,
+      jsonEncode(bindings),
+    );
+  }
+
+  Map<String, String> getSemesterTimeSlotTemplateBindings() {
+    final rawJson = _prefs.getString(_keySemesterTimeSlotTemplateBindings);
+    if (rawJson == null || rawJson.isEmpty) {
+      return {};
+    }
+
+    try {
+      final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
+      return decoded.map((key, value) => MapEntry(key, value.toString()));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  String? getSemesterTimeSlotTemplateId(String semesterId) {
+    final bindings = getSemesterTimeSlotTemplateBindings();
+    final templateId = bindings[semesterId];
+    if (templateId == null) {
+      return null;
+    }
+    return getTimeSlotTemplateById(templateId) == null ? null : templateId;
+  }
+
+  Future<void> setSemesterTimeSlotTemplateId(
+    String semesterId,
+    String? templateId,
+  ) async {
+    final bindings = getSemesterTimeSlotTemplateBindings();
+    if (templateId == null || templateId.isEmpty) {
+      bindings.remove(semesterId);
+    } else {
+      bindings[semesterId] = templateId;
+    }
+    await _prefs.setString(
+      _keySemesterTimeSlotTemplateBindings,
+      jsonEncode(bindings),
+    );
   }
 }

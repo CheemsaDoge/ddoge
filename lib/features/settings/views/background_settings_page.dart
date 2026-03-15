@@ -6,10 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import 'package:ddoge/core/router/app_router.dart';
 import 'package:ddoge/core/constants/wallpapers.dart';
 import 'package:ddoge/core/storage/settings_storage.dart';
 import 'package:ddoge/features/schedule/providers/schedule_providers.dart';
+import 'package:ddoge/features/settings/widgets/settings_subpage_scaffold.dart';
 
 /// 课表背景设置页面
 class BackgroundSettingsPage extends ConsumerWidget {
@@ -23,14 +23,14 @@ class BackgroundSettingsPage extends ConsumerWidget {
     final customPath = ref.watch(customBackgroundPathProvider);
     final opacity = ref.watch(backgroundOpacityProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('课表背景')),
-      body: ListView(
+    return SettingsSubpageScaffold(
+      title: '课表背景',
+      child: ListView(
         padding: EdgeInsets.fromLTRB(
           16,
           16,
           16,
-          MediaQuery.of(context).padding.bottom + kCustomNavBarHeight + 16,
+          settingsSubpageBottomPadding(context),
         ),
         children: [
           // 预览区域

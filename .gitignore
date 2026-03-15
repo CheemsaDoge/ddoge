@@ -44,3 +44,12 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 android/build/
+
+# Local debugging / collaboration artifacts
+.npm-cache/
+.playwright-browsers/
+node_modules/
+package.json
+package-lock.json
+plan.md
+uestc-eams-api.md
