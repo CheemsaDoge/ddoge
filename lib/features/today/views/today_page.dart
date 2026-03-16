@@ -141,11 +141,11 @@ class TodayPage extends ConsumerWidget {
         if (status == _CourseStatus.upcoming) {
           final diff = startMinutes - nowMinutes;
           if (diff <= 60) {
-            countdown = '${diff}分钟后上课';
+            countdown = '$diff分钟后上课';
           }
         } else if (status == _CourseStatus.ongoing) {
           final remaining = endMinutes - nowMinutes;
-          countdown = '还剩${remaining}分钟';
+          countdown = '还剩$remaining分钟';
         }
 
         final isLast = index == courses.length - 1;

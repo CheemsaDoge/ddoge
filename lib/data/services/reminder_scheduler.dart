@@ -94,12 +94,12 @@ class ReminderScheduler {
   /// 构建通知正文
   String _buildBody(Course course, TimeSlot slot, int minutesBefore) {
     final parts = <String>[];
-    parts.add('${minutesBefore}分钟后上课');
+    parts.add('$minutesBefore分钟后上课');
     final timeStr =
         '${slot.startHour.toString().padLeft(2, '0')}:${slot.startMinute.toString().padLeft(2, '0')}';
     parts.add('时间: $timeStr');
-    if (course.classroom.isNotEmpty) parts.add('教室: ${course.classroom}');
-    if (course.teacher.isNotEmpty) parts.add('教师: ${course.teacher}');
+    if (course.classroom.isNotEmpty) parts.add('教室: $course.classroom');
+    if (course.teacher.isNotEmpty) parts.add('教师: $course.teacher');
     return parts.join('\n');
   }
 

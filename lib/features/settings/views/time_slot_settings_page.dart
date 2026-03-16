@@ -24,6 +24,7 @@ class _TimeSlotSettingsPageState extends ConsumerState<TimeSlotSettingsPage> {
   List<TimeSlotTemplate> _templates = const [];
   String? _selectedTemplateId;
   bool _templateStateLoaded = false;
+  String? _templateStateSemesterId;
   bool _hasChanges = false;
 
   // 批量生成参数
@@ -259,6 +260,7 @@ class _TimeSlotSettingsPageState extends ConsumerState<TimeSlotSettingsPage> {
 
   Widget _buildTemplateSection(ThemeData theme) {
     final selectedTemplate = _selectedTemplate;
+    final dropdownValue = _selectedTemplateValue;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -272,27 +274,48 @@ class _TimeSlotSettingsPageState extends ConsumerState<TimeSlotSettingsPage> {
             ),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            key: ValueKey(_selectedTemplateId),
-            initialValue: _selectedTemplateId,
-            items: _templates
-                .map(
-                  (template) => DropdownMenuItem<String>(
-                    value: template.id,
-                    child: Text(template.name),
-                  ),
-                )
-                .toList(),
-            decoration: const InputDecoration(
-              labelText: '选择已有模板',
-              prefixIcon: Icon(Icons.bookmarks_outlined),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.colorScheme.outline.withValues(alpha: 0.18),
+              ),
             ),
-            hint: const Text('从模板库中选择'),
-            onChanged: (value) {
-              setState(() {
-                _selectedTemplateId = value;
-              });
-            },
+            child: Row(
+              children: [
+                Icon(
+                  Icons.bookmarks_outlined,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: dropdownValue,
+                      hint: const Text('从模板库中选择'),
+                      isExpanded: true,
+                      borderRadius: BorderRadius.circular(12),
+                      items: _templates
+                          .map(
+                            (template) => DropdownMenuItem<String>(
+                              value: template.id,
+                              child: Text(template.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedTemplateId = value;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -660,13 +683,17 @@ class _TimeSlotSettingsPageState extends ConsumerState<TimeSlotSettingsPage> {
       final last = _editingSlots?.lastOrNull;
       final newIndex = (_editingSlots?.length ?? 0) + 1;
       _editingSlots ??= [];
+      final startMinutes = last == null
+          ? (_morningFirstSlotStart.hour * 60 + _morningFirstSlotStart.minute)
+          : (last.endHour * 60 + last.endMinute + _breakDuration);
+      final endMinutes = startMinutes + _slotDuration;
       _editingSlots!.add(
         _EditableTimeSlot(
           index: newIndex,
-          startHour: last != null ? last.endHour : 8,
-          startMinute: last != null ? last.endMinute + 10 : 0,
-          endHour: last != null ? last.endHour + 1 : 8,
-          endMinute: last != null ? last.endMinute : 45,
+          startHour: startMinutes ~/ 60,
+          startMinute: startMinutes % 60,
+          endHour: endMinutes ~/ 60,
+          endMinute: endMinutes % 60,
         ),
       );
     });
@@ -674,6 +701,13 @@ class _TimeSlotSettingsPageState extends ConsumerState<TimeSlotSettingsPage> {
 
   Future<void> _saveAll(String semesterId) async {
     if (_editingSlots == null) return;
+    final validationError = _validateEditingSlots();
+    if (validationError != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(validationError)));
+      return;
+    }
 
     final dao = ref.read(timeSlotDaoProvider);
     final settingsStorage = ref.read(settingsStorageProvider);
@@ -702,7 +736,7 @@ class _TimeSlotSettingsPageState extends ConsumerState<TimeSlotSettingsPage> {
   }
 
   void _ensureTemplateState(String semesterId, List<TimeSlot> slots) {
-    if (_templateStateLoaded) {
+    if (_templateStateLoaded && _templateStateSemesterId == semesterId) {
       return;
     }
 
@@ -718,6 +752,7 @@ class _TimeSlotSettingsPageState extends ConsumerState<TimeSlotSettingsPage> {
         boundTemplateId ??
         findMatchingTimeSlotTemplateId(templates, currentSlots);
     _templateStateLoaded = true;
+    _templateStateSemesterId = semesterId;
   }
 
   List<TimeSlotTemplateSlot> _currentEditableTemplateSlots() {
@@ -743,6 +778,19 @@ class _TimeSlotSettingsPageState extends ConsumerState<TimeSlotSettingsPage> {
     for (final template in _templates) {
       if (template.id == _selectedTemplateId) {
         return template;
+      }
+    }
+    return null;
+  }
+
+  String? get _selectedTemplateValue {
+    final selectedTemplateId = _selectedTemplateId;
+    if (selectedTemplateId == null) {
+      return null;
+    }
+    for (final template in _templates) {
+      if (template.id == selectedTemplateId) {
+        return selectedTemplateId;
       }
     }
     return null;
@@ -849,6 +897,23 @@ class _TimeSlotSettingsPageState extends ConsumerState<TimeSlotSettingsPage> {
         _selectedTemplateId = null;
       }
     });
+  }
+
+  String? _validateEditingSlots() {
+    final slots = _editingSlots;
+    if (slots == null || slots.isEmpty) {
+      return '请先生成或添加至少一个节次';
+    }
+
+    for (final slot in slots) {
+      final startMinutes = slot.startHour * 60 + slot.startMinute;
+      final endMinutes = slot.endHour * 60 + slot.endMinute;
+      if (endMinutes <= startMinutes) {
+        return '第 ${slot.index} 节结束时间必须晚于开始时间';
+      }
+    }
+
+    return null;
   }
 }
 

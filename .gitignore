@@ -48,6 +48,7 @@ android/build/
 # Local debugging / collaboration artifacts
 .npm-cache/
 .playwright-browsers/
+.gradle-home/
 node_modules/
 package.json
 package-lock.json

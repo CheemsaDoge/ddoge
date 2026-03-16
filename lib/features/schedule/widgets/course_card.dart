@@ -64,6 +64,17 @@ class _CourseCardState extends State<CourseCard>
         widget.course.colorIndex % AppColors.courseColors.length];
     final textColor = _contrastTextColor(color);
     final fs = widget.fontScale;
+    final nameMaxLines = switch (widget.slotCount) {
+      <= 1 => 2,
+      2 => 3,
+      _ => 4,
+    };
+    final detailMaxLines = switch (widget.slotCount) {
+      <= 1 => 1,
+      2 => 2,
+      _ => 3,
+    };
+    final showTeacher = widget.course.teacher.isNotEmpty && widget.slotCount >= 3;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -78,13 +89,10 @@ class _CourseCardState extends State<CourseCard>
         decoration: BoxDecoration(
           color: color.withValues(alpha: widget.opacity),
           borderRadius: BorderRadius.circular(widget.borderRadius),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.2),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          border: Border.all(
+            color: textColor.withValues(alpha: 0.12),
+            width: 0.8,
+          ),
         ),
         child: Material(
           color: Colors.transparent,
@@ -97,35 +105,51 @@ class _CourseCardState extends State<CourseCard>
             splashColor: textColor.withValues(alpha: 0.2),
             highlightColor: textColor.withValues(alpha: 0.1),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+              padding: const EdgeInsets.fromLTRB(6, 6, 5, 5),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
                   Text(
                     widget.course.name,
                     style: TextStyle(
                       color: textColor,
                       fontSize: 11 * fs,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                       height: 1.2,
                     ),
-                    maxLines: widget.slotCount > 1 ? 4 : 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
+                    maxLines: nameMaxLines,
+                    overflow: TextOverflow.clip,
+                    softWrap: true,
+                    textAlign: TextAlign.left,
                   ),
-                  if (widget.course.classroom.isNotEmpty &&
-                      widget.slotCount > 1) ...[
-                    const SizedBox(height: 2),
+                  if (widget.course.classroom.isNotEmpty) ...[
+                    const SizedBox(height: 3),
                     Text(
-                      widget.course.classroom,
+                      '@${widget.course.classroom}',
                       style: TextStyle(
                         color: textColor.withValues(alpha: 0.85),
                         fontSize: 9 * fs,
                         height: 1.2,
                       ),
+                      maxLines: detailMaxLines,
+                      overflow: TextOverflow.clip,
+                      softWrap: true,
+                      textAlign: TextAlign.left,
+                    ),
+                  ],
+                  if (showTeacher) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.course.teacher,
+                      style: TextStyle(
+                        color: textColor.withValues(alpha: 0.74),
+                        fontSize: 8.5 * fs,
+                        height: 1.15,
+                      ),
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.clip,
+                      textAlign: TextAlign.left,
                     ),
                   ],
                 ],

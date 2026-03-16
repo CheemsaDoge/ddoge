@@ -39,6 +39,7 @@ class WeekHeader extends StatelessWidget {
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: theme.colorScheme.primary,
+                  height: 1.0,
                 ),
               ),
               Text(
@@ -46,6 +47,7 @@ class WeekHeader extends StatelessWidget {
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontSize: 9,
                   color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                  height: 1.0,
                 ),
               ),
             ],
@@ -71,13 +73,14 @@ class WeekHeader extends StatelessWidget {
                         ? theme.colorScheme.primary
                         : theme.colorScheme.onSurfaceVariant,
                     fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                    height: 1.0,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 if (date != null)
                   Container(
-                    width: 24,
-                    height: 24,
+                    width: 22,
+                    height: 22,
                     decoration: isToday
                         ? BoxDecoration(
                             color: theme.colorScheme.primary,
@@ -93,7 +96,8 @@ class WeekHeader extends StatelessWidget {
                             : theme.colorScheme.onSurfaceVariant,
                         fontWeight:
                             isToday ? FontWeight.w700 : FontWeight.w400,
-                        fontSize: 11,
+                        fontSize: 10.5,
+                        height: 1.0,
                       ),
                     ),
                   ),

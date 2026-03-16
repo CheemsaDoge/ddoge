@@ -14,6 +14,7 @@ import '../widgets/current_time_line.dart';
 
 import 'package:ddoge/shared/widgets/glass_container.dart';
 
+const _kScheduleToolbarHeight = 48.0;
 const _kScheduleAutoFitBottomGap = 12.0;
 const _kFloatingActionButtonBottomOffset = 36.0;
 
@@ -90,6 +91,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       appBar: GlassAppBar(
+        toolbarHeight: _kScheduleToolbarHeight,
         title: semesterAsync.when(
           data: (semester) {
             if (semester == null) {
@@ -163,6 +165,18 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           );
           final timeSlots = timeSlotsAsync.valueOrNull ?? [];
           final coursesList = allCourses.valueOrNull ?? [];
+          final weekCourseBuckets = _groupCoursesByWeek(
+            coursesList,
+            totalWeeks,
+          );
+          final weekDateBuckets = List.generate(
+            totalWeeks,
+            (index) => app_date.DateUtils.datesForWeek(
+              semester.startDate,
+              index + 1,
+            ),
+            growable: false,
+          );
 
           _ensurePageController(totalWeeks, selectedWeek);
 
@@ -170,12 +184,14 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             children: [
               // 留出 AppBar 的空间（因为 extendBodyBehindAppBar: true）
               SizedBox(
-                height: MediaQuery.of(context).padding.top + kToolbarHeight,
+                height: MediaQuery.of(context).padding.top +
+                    _kScheduleToolbarHeight,
               ),
               // 课程表网格（PageView 实现平滑滑动过渡）
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
+                  allowImplicitScrolling: true,
                   // 有格子选中时禁止 PageView 滑动，防止误触翻页导致变白
                   physics: _selectedDay != null
                       ? const NeverScrollableScrollPhysics()
@@ -189,49 +205,38 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                   },
                   itemBuilder: (context, index) {
                     final pageWeek = index + 1;
-                    // 按周过滤课程
-                    final weekCourses = coursesList.where((course) {
-                      return app_date.DateUtils.isCourseActiveInWeek(
-                        course.startWeek,
-                        course.endWeek,
-                        course.weekType,
-                        pageWeek,
-                      );
-                    }).toList();
-
-                    return _ScheduleGrid(
-                      courses: weekCourses,
-                      timeSlots: timeSlots,
-                      weekDates: app_date.DateUtils.datesForWeek(
-                        semester.startDate,
-                        pageWeek,
+                    return RepaintBoundary(
+                      child: _ScheduleGrid(
+                        courses: weekCourseBuckets[index],
+                        timeSlots: timeSlots,
+                        weekDates: weekDateBuckets[index],
+                        selectedWeek: pageWeek,
+                        currentWeek: currentWeek,
+                        autoFitHeight: autoFit,
+                        fixedSlotHeight: fixedSlotHeight,
+                        cardBorderRadius: cardRadius,
+                        cardOpacity: cardOpacity,
+                        cardFontScale: cardFontScale,
+                        showGridLines: showGrid,
+                        showTimeLine: showTimeLine,
+                        gridLineColorIndex: gridLineColorIndex,
+                        gridLineWidth: gridLineWidth,
+                        gridLineOpacity: gridLineOpacity,
+                        gridLineDashed: gridLineDashed,
+                        selectedDay: pageWeek == selectedWeek
+                            ? _selectedDay
+                            : null,
+                        selectedStartSlot: pageWeek == selectedWeek
+                            ? _selectedStartSlot
+                            : null,
+                        selectedEndSlot: pageWeek == selectedWeek
+                            ? _selectedEndSlot
+                            : null,
+                        onSlotTap: _onSlotTap,
+                        gridKey: pageWeek == selectedWeek ? _gridKey : null,
+                        onHandleDragUpdate: _onHandleDragUpdate,
+                        onHandleDragEnd: _onHandleDragEnd,
                       ),
-                      selectedWeek: pageWeek,
-                      currentWeek: currentWeek,
-                      autoFitHeight: autoFit,
-                      fixedSlotHeight: fixedSlotHeight,
-                      cardBorderRadius: cardRadius,
-                      cardOpacity: cardOpacity,
-                      cardFontScale: cardFontScale,
-                      showGridLines: showGrid,
-                      showTimeLine: showTimeLine,
-                      gridLineColorIndex: gridLineColorIndex,
-                      gridLineWidth: gridLineWidth,
-                      gridLineOpacity: gridLineOpacity,
-                      gridLineDashed: gridLineDashed,
-                      selectedDay: pageWeek == selectedWeek
-                          ? _selectedDay
-                          : null,
-                      selectedStartSlot: pageWeek == selectedWeek
-                          ? _selectedStartSlot
-                          : null,
-                      selectedEndSlot: pageWeek == selectedWeek
-                          ? _selectedEndSlot
-                          : null,
-                      onSlotTap: _onSlotTap,
-                      gridKey: pageWeek == selectedWeek ? _gridKey : null,
-                      onHandleDragUpdate: _onHandleDragUpdate,
-                      onHandleDragEnd: _onHandleDragEnd,
                     );
                   },
                 ),
@@ -266,6 +271,32 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     if (week < 1) return 1;
     if (week > semester.totalWeeks) return semester.totalWeeks;
     return week;
+  }
+
+  List<List<Course>> _groupCoursesByWeek(List<Course> courses, int totalWeeks) {
+    final groupedCourses = List.generate(
+      totalWeeks,
+      (_) => <Course>[],
+      growable: false,
+    );
+
+    for (final course in courses) {
+      final startWeek = course.startWeek.clamp(1, totalWeeks).toInt();
+      final endWeek = course.endWeek.clamp(1, totalWeeks).toInt();
+      for (int week = startWeek; week <= endWeek; week++) {
+        if (!app_date.DateUtils.isCourseActiveInWeek(
+          course.startWeek,
+          course.endWeek,
+          course.weekType,
+          week,
+        )) {
+          continue;
+        }
+        groupedCourses[week - 1].add(course);
+      }
+    }
+
+    return groupedCourses;
   }
 
   void _syncSelectionProvider() {
@@ -446,6 +477,7 @@ class _ScheduleGrid extends StatelessWidget {
     final slotCount = timeSlots.isEmpty
         ? TimeSlotConstants.maxSlotsPerDay
         : timeSlots.length;
+    final occupiedSlotKeys = _buildOccupiedSlotKeys();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -453,13 +485,17 @@ class _ScheduleGrid extends StatelessWidget {
         final dayWidth = (constraints.maxWidth - timeColumnWidth) / 7;
 
         // 自适应高度：网格填满可用空间；固定高度：使用设置值
-        final headerHeight = 36.0; // WeekHeader 高度
+        final headerHeight = 34.0; // WeekHeader 高度
         final dividerHeight = 1.0;
+        final bottomInset =
+            MediaQuery.of(context).padding.bottom +
+            kCustomNavBarHeight +
+            _kScheduleAutoFitBottomGap;
         final availableHeight =
             (constraints.maxHeight -
                     headerHeight -
                     dividerHeight -
-                    (autoFitHeight ? _kScheduleAutoFitBottomGap : 0))
+                    (autoFitHeight ? bottomInset : 0))
                 .clamp(0.0, double.infinity)
                 .toDouble();
         final slotHeight = autoFitHeight
@@ -493,6 +529,7 @@ class _ScheduleGrid extends StatelessWidget {
                         timeColumnWidth,
                         todayIndex,
                         gridHeight,
+                        occupiedSlotKeys,
                       ),
                     )
                   : SingleChildScrollView(
@@ -509,6 +546,7 @@ class _ScheduleGrid extends StatelessWidget {
                         timeColumnWidth,
                         todayIndex,
                         gridHeight,
+                        occupiedSlotKeys,
                       ),
                     ),
             ),
@@ -526,6 +564,7 @@ class _ScheduleGrid extends StatelessWidget {
     double timeColumnWidth,
     int todayIndex,
     double gridHeight,
+    Set<int> occupiedSlotKeys,
   ) {
     return SizedBox(
       key: gridKey,
@@ -549,6 +588,7 @@ class _ScheduleGrid extends StatelessWidget {
             slotHeight,
             dayWidth,
             timeColumnWidth,
+            occupiedSlotKeys,
           ),
           // 左侧时间列
           Positioned(
@@ -587,15 +627,12 @@ class _ScheduleGrid extends StatelessWidget {
     double slotHeight,
     double dayWidth,
     double timeColumnWidth,
+    Set<int> occupiedSlotKeys,
   ) {
     final areas = <Widget>[];
     for (int day = 1; day <= 7; day++) {
       for (int slot = 1; slot <= slotCount; slot++) {
-        // 跳过已有课程的格子
-        final hasCourse = courses.any(
-          (c) => c.dayOfWeek == day && slot >= c.startSlot && slot <= c.endSlot,
-        );
-        if (hasCourse) continue;
+        if (occupiedSlotKeys.contains(_slotKey(day, slot))) continue;
 
         final left = timeColumnWidth + (day - 1) * dayWidth;
         final top = (slot - 1) * slotHeight;
@@ -617,6 +654,18 @@ class _ScheduleGrid extends StatelessWidget {
     }
     return areas;
   }
+
+  Set<int> _buildOccupiedSlotKeys() {
+    final occupiedSlots = <int>{};
+    for (final course in courses) {
+      for (int slot = course.startSlot; slot <= course.endSlot; slot++) {
+        occupiedSlots.add(_slotKey(course.dayOfWeek, slot));
+      }
+    }
+    return occupiedSlots;
+  }
+
+  int _slotKey(int day, int slot) => day * 100 + slot;
 
   /// 选中区域的高亮层 + 右侧拖拽手柄
   List<Widget> _buildSelectionOverlay(

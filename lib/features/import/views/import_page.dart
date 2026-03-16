@@ -2064,29 +2064,41 @@ class _ImportPageState extends ConsumerState<ImportPage> {
         throw Exception('未找到课表数据，请确保已进入查询结果页面');
       }
 
+      final database = ref.read(databaseProvider);
       final courseDao = ref.read(courseDaoProvider);
       final timeSlotDao = ref.read(timeSlotDaoProvider);
       final settingsStorage = ref.read(settingsStorageProvider);
-      final Set<String> names = {};
-      for (final c in parsedCourses) {
-        if (!names.contains(c.name)) names.add(c.name);
-        await courseDao.upsertCourse(
-          CoursesCompanion(
-            id: drift.Value(c.id),
-            name: drift.Value(c.name),
-            teacher: drift.Value(c.teacher),
-            classroom: drift.Value(c.classroom),
-            dayOfWeek: drift.Value(c.dayOfWeek),
-            startSlot: drift.Value(c.startSlot),
-            endSlot: drift.Value(c.endSlot),
-            startWeek: drift.Value(c.startWeek),
-            endWeek: drift.Value(c.endWeek),
-            weekType: drift.Value(c.weekType),
-            colorIndex: drift.Value(names.length % 10),
-            semesterId: drift.Value(semester.id),
-          ),
-        );
-      }
+      final names = <String>{};
+      final courseColorByName = <String, int>{};
+
+      await database.transaction(() async {
+        await courseDao.deleteCoursesForSemester(semester.id);
+
+        for (final c in parsedCourses) {
+          names.add(c.name);
+          final colorIndex = courseColorByName.putIfAbsent(
+            c.name,
+            () => courseColorByName.length % 10,
+          );
+
+          await courseDao.upsertCourse(
+            CoursesCompanion(
+              id: drift.Value(c.id),
+              name: drift.Value(c.name),
+              teacher: drift.Value(c.teacher),
+              classroom: drift.Value(c.classroom),
+              dayOfWeek: drift.Value(c.dayOfWeek),
+              startSlot: drift.Value(c.startSlot),
+              endSlot: drift.Value(c.endSlot),
+              startWeek: drift.Value(c.startWeek),
+              endWeek: drift.Value(c.endWeek),
+              weekType: drift.Value(c.weekType),
+              colorIndex: drift.Value(colorIndex),
+              semesterId: drift.Value(semester.id),
+            ),
+          );
+        }
+      });
 
       if (parseResult.timeSlotTemplate != null) {
         await _applyImportedTimeSlotTemplate(

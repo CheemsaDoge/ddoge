@@ -54,6 +54,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.bottom,
     this.blur = 15.0,
     this.opacity = 0.5,
+    this.toolbarHeight = kToolbarHeight,
   });
 
   final Widget title;
@@ -62,11 +63,10 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   final PreferredSizeWidget? bottom;
   final double blur;
   final double opacity;
+  final double toolbarHeight;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return GlassContainer(
       blur: blur,
       opacity: opacity,
@@ -75,6 +75,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
         actions: actions,
         leading: leading,
         bottom: bottom,
+        toolbarHeight: toolbarHeight,
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -84,5 +85,5 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Size get preferredSize => Size.fromHeight(
-      kToolbarHeight + (bottom?.preferredSize.height ?? 0.0));
+      toolbarHeight + (bottom?.preferredSize.height ?? 0.0));
 }

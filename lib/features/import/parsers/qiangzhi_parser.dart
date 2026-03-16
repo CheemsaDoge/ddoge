@@ -10,11 +10,12 @@ class QiangzhiParser {
   List<Course> parse(String html, String semesterId) {
     final document = html_parser.parse(html);
     final uuid = const Uuid();
-    
+
     // 强智通常使用 id="kbtable" 的表格
-    final table = document.getElementById('kbtable') ?? 
-                  document.querySelector('table.kbtable');
-    
+    final table =
+        document.getElementById('kbtable') ??
+        document.querySelector('table.kbtable');
+
     if (table == null) return [];
 
     final courses = <Course>[];
@@ -51,9 +52,13 @@ class QiangzhiParser {
 
           for (var part in parts.skip(1)) {
             final text = part.replaceAll(RegExp(r'<[^>]*>'), '').trim();
-            if (text.contains('周')) weekStr = text;
-            else if (text.length > 2 && teacher.isEmpty) teacher = text;
-            else if (text.length > 2) classroom = text;
+            if (text.contains('周')) {
+              weekStr = text;
+            } else if (text.length > 2 && teacher.isEmpty) {
+              teacher = text;
+            } else if (text.length > 2) {
+              classroom = text;
+            }
           }
 
           final weekInfo = _parseWeekInfo(weekStr);
@@ -100,7 +105,7 @@ class QiangzhiParser {
   List<Course> _mergeContinuousSlots(List<Course> courses) {
     // 逻辑：如果课程名、教室、星期、周次都相同，且节次连续，则合并
     // 这是一个简化处理
-    return courses; 
+    return courses;
   }
 }
 
@@ -108,5 +113,9 @@ class _QzWeekInfo {
   final int startWeek;
   final int endWeek;
   final int weekType;
-  _QzWeekInfo({required this.startWeek, required this.endWeek, required this.weekType});
+  _QzWeekInfo({
+    required this.startWeek,
+    required this.endWeek,
+    required this.weekType,
+  });
 }

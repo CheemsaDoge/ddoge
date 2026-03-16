@@ -193,7 +193,7 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('DDoge 课程表'),
-                subtitle: const Text('版本 1.2.0 beta'),
+                subtitle: const Text('版本 1.2.0'),
               ),
             ],
           ),
