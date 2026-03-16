@@ -1,19 +1,40 @@
+import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
 import 'package:ddoge/core/constants/time_slots.dart';
 import 'package:ddoge/core/utils/date_utils.dart' as app_date;
 import 'package:ddoge/data/database/app_database.dart';
 
-/// 桌面小组件服务 — 更新 Android/iOS 桌面课表组件
+/// 桌面小组件服务。
+///
+/// Android 已接入桌面小组件；iOS 侧先保持主应用可用，暂不启用 Widget 扩展刷新。
 class WidgetService {
   WidgetService._();
   static final instance = WidgetService._();
 
   static const _appGroupId = 'group.com.ddoge.ddoge';
   static const _androidWidgetName = 'HomeWidgetProvider';
+  static const _iOSWidgetName = 'DDogeScheduleWidget';
+  static const _iosWidgetsEnabled = false;
+
+  bool get supportsWidgets {
+    if (kIsWeb) return false;
+
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => true,
+      TargetPlatform.iOS => _iosWidgetsEnabled,
+      _ => false,
+    };
+  }
+
+  bool get isIosWidgetPending =>
+      !kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.iOS &&
+      !_iosWidgetsEnabled;
 
   /// 初始化
   Future<void> init() async {
+    if (!supportsWidgets) return;
     await HomeWidget.setAppGroupId(_appGroupId);
   }
 
@@ -27,12 +48,17 @@ class WidgetService {
     required List<Course> courses,
     required List<TimeSlot> timeSlots,
   }) async {
+    if (!supportsWidgets) return;
+
     final title = _buildTitle();
     final content = _buildContent(semester, courses, timeSlots);
 
     await HomeWidget.saveWidgetData<String>('widget_title', title);
     await HomeWidget.saveWidgetData<String>('widget_content', content);
-    await HomeWidget.updateWidget(androidName: _androidWidgetName);
+    await HomeWidget.updateWidget(
+      androidName: _androidWidgetName,
+      iOSName: _iOSWidgetName,
+    );
   }
 
   /// 标题：今日日期
@@ -51,8 +77,9 @@ class WidgetService {
   ) {
     if (semester == null) return '请先设置学期';
 
-    final currentWeek =
-        app_date.DateUtils.currentWeekNumber(semester.startDate);
+    final currentWeek = app_date.DateUtils.currentWeekNumber(
+      semester.startDate,
+    );
     if (currentWeek < 1 || currentWeek > semester.totalWeeks) {
       return '当前不在学期范围内';
     }
@@ -68,8 +95,7 @@ class WidgetService {
         c.weekType,
         currentWeek,
       );
-    }).toList()
-      ..sort((a, b) => a.startSlot.compareTo(b.startSlot));
+    }).toList()..sort((a, b) => a.startSlot.compareTo(b.startSlot));
 
     if (todayCourses.isEmpty) return '今天没有课程，享受自由时光!';
 

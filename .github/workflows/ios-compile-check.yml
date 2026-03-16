@@ -1,0 +1,67 @@
+name: iOS Compile Check
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/ios-compile-check.yml
+      - ios/**
+      - lib/**
+      - assets/**
+      - pubspec.yaml
+      - pubspec.lock
+      - analysis_options.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/ios-compile-check.yml
+      - ios/**
+      - lib/**
+      - assets/**
+      - pubspec.yaml
+      - pubspec.lock
+      - analysis_options.yaml
+
+concurrency:
+  group: ios-compile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-compile:
+    name: Build iOS Without Codesign
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        run: |
+          git clone https://github.com/flutter/flutter.git --depth 1 --branch stable "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+          "$HOME/flutter/bin/flutter" --version
+
+      - name: Show toolchain versions
+        run: |
+          flutter doctor -v
+          xcodebuild -version
+          pod --version
+
+      - name: Precache iOS artifacts
+        run: flutter precache --ios
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios
+        run: pod install
+
+      - name: Build iOS app without code signing
+        run: flutter build ios --release --no-codesign

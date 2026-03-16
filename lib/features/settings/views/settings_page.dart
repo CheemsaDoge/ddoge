@@ -30,6 +30,9 @@ class SettingsPage extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final reminderMinutes = ref.watch(reminderMinutesProvider);
     final settingsStorage = ref.read(settingsStorageProvider);
+    final widgetService = ref.read(widgetServiceProvider);
+    final supportsWidgets = widgetService.supportsWidgets;
+    final isIosWidgetPending = widgetService.isIosWidgetPending;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -175,13 +178,31 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.widgets_outlined),
                 title: const Text('刷新桌面小组件'),
-                subtitle: const Text('手动更新桌面课表小组件'),
-                onTap: () {
-                  ref.invalidate(reminderAutoScheduleProvider);
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('桌面小组件已刷新')));
-                },
+                subtitle: Text(
+                  supportsWidgets
+                      ? '手动更新桌面课表小组件'
+                      : isIosWidgetPending
+                      ? 'iOS 小组件扩展尚未接入，当前版本先保留主应用功能'
+                      : '当前平台不支持桌面小组件',
+                ),
+                onTap: supportsWidgets
+                    ? () {
+                        ref.invalidate(reminderAutoScheduleProvider);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('桌面小组件已刷新')),
+                        );
+                      }
+                    : () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              isIosWidgetPending
+                                  ? 'iOS 小组件会在后续单独接入'
+                                  : '当前平台不支持桌面小组件',
+                            ),
+                          ),
+                        );
+                      },
               ),
             ],
           ),
