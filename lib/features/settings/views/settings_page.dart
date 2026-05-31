@@ -18,6 +18,7 @@ import 'package:ddoge/core/router/app_router.dart';
 import 'package:ddoge/core/storage/settings_storage.dart';
 import 'package:ddoge/data/services/notification_service.dart';
 import 'package:ddoge/data/database/app_database.dart';
+import 'package:ddoge/features/settings/widgets/app_update_tile.dart';
 
 import 'package:ddoge/shared/widgets/glass_container.dart';
 
@@ -211,10 +212,11 @@ class SettingsPage extends ConsumerWidget {
           _SettingsSection(
             title: '关于',
             children: [
+              const AppUpdateTile(),
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('DDoge 课程表'),
-                subtitle: const Text('版本 1.2.0'),
+                subtitle: const Text('版本 1.3.0'),
               ),
             ],
           ),

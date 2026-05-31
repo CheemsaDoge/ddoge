@@ -41,9 +41,19 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   /// 网格区域的 Key，用于拖拽手柄的坐标转换
   final GlobalKey _gridKey = GlobalKey();
 
+  late final StateController<bool> _selectionActiveNotifier;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectionActiveNotifier = ref.read(
+      scheduleSelectionActiveProvider.notifier,
+    );
+  }
+
   @override
   void dispose() {
-    ref.read(scheduleSelectionActiveProvider.notifier).state = false;
+    _selectionActiveNotifier.state = false;
     _pageController?.dispose();
     super.dispose();
   }
@@ -171,10 +181,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           );
           final weekDateBuckets = List.generate(
             totalWeeks,
-            (index) => app_date.DateUtils.datesForWeek(
-              semester.startDate,
-              index + 1,
-            ),
+            (index) =>
+                app_date.DateUtils.datesForWeek(semester.startDate, index + 1),
             growable: false,
           );
 
@@ -184,7 +192,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             children: [
               // 留出 AppBar 的空间（因为 extendBodyBehindAppBar: true）
               SizedBox(
-                height: MediaQuery.of(context).padding.top +
+                height:
+                    MediaQuery.of(context).padding.top +
                     _kScheduleToolbarHeight,
               ),
               // 课程表网格（PageView 实现平滑滑动过渡）

@@ -32,7 +32,7 @@ void main() {
       final courses = parser.parse(html, semesterId);
 
       expect(courses.length, 2);
-      
+
       // 检查第一个课程：专业写作基础
       final writing = courses.firstWhere((c) => c.name == '专业写作基础');
       expect(writing.teacher, '叶茂');
@@ -49,7 +49,7 @@ void main() {
       expect(discrete.teacher, '傅彦');
       expect(discrete.classroom, '品学楼A110');
       expect(discrete.dayOfWeek, 5); // index = 4*unitCount
-      expect(discrete.startSlot, 9); 
+      expect(discrete.startSlot, 9);
       expect(discrete.endSlot, 11);
     });
 
@@ -58,19 +58,19 @@ void main() {
         <script>
           var unitCount = 12;
           // 单周: 第1, 3, 5周有课
-          activity = new TaskActivity("1","T1","101","单周课(1)","1","R1","01010100000000000000000000000000000000000000000000000");
+          activity = new TaskActivity("1","T1","101","单周课(A1)","1","R1","01010100000000000000000000000000000000000000000000000");
           index = 0*unitCount+0;
           table0.activities[index][0]=activity;
           
           // 双周: 第2, 4, 6周有课
-          activity = new TaskActivity("2","T2","102","双周课(2)","2","R2","00101010000000000000000000000000000000000000000000000");
+          activity = new TaskActivity("2","T2","102","双周课(A2)","2","R2","00101010000000000000000000000000000000000000000000000");
           index = 1*unitCount+0;
           table0.activities[index][0]=activity;
         </script>
       ''';
 
       final courses = parser.parse(html, semesterId);
-      
+
       final oddCourse = courses.firstWhere((c) => c.name == '单周课');
       expect(oddCourse.weekType, 1);
       expect(oddCourse.startWeek, 1);
