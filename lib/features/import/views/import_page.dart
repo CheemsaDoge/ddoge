@@ -4,6 +4,7 @@ import 'package:ddoge/core/models/time_slot_template.dart';
 import 'package:ddoge/core/storage/settings_storage.dart';
 import 'package:ddoge/data/database/daos/time_slot_dao.dart';
 import 'package:ddoge/features/import/models/import_parse_result.dart';
+import 'package:ddoge/features/import/parsers/mht_html_extractor.dart';
 import 'package:ddoge/features/import/parsers/qiangzhi_parser.dart';
 import 'package:ddoge/features/import/parsers/uestc_eams_parser.dart';
 import 'package:ddoge/features/import/parsers/urp_parser.dart';
@@ -120,7 +121,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
             IconButton(
               onPressed: _isImporting ? null : _pickHtmlForPreview,
               icon: const Icon(Icons.upload_file_outlined),
-              tooltip: '导入本地 HTML',
+              tooltip: '导入本地 HTML/MHT',
             ),
           if (showWebView)
             IconButton(
@@ -2006,7 +2007,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     try {
       final selection = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: const ['html', 'htm'],
+        allowedExtensions: const ['html', 'htm', 'mht', 'mhtml'],
         allowMultiple: false,
         withData: true,
       );
@@ -2015,14 +2016,15 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       final file = selection.files.single;
       final bytes = file.bytes;
       if (bytes == null || bytes.isEmpty) {
-        throw Exception('无法读取所选 HTML 文件');
+        throw Exception('无法读取所选 HTML/MHT 文件');
       }
 
       // The page is treated strictly as text. Its JavaScript is never run.
-      final parsed = UestcEamsParser().parseImportResult(
-        utf8.decode(bytes, allowMalformed: true),
-        semester.id,
-      );
+      final extension = (file.extension ?? '').toLowerCase();
+      final html = extension == 'mht' || extension == 'mhtml'
+          ? const MhtHtmlExtractor().extract(bytes)
+          : utf8.decode(bytes, allowMalformed: true);
+      final parsed = UestcEamsParser().parseImportResult(html, semester.id);
       if (parsed.courses.isEmpty) {
         final reason = parsed.warnings.isEmpty
             ? ''
