@@ -8,6 +8,8 @@ import 'package:ddoge/features/import/parsers/qiangzhi_parser.dart';
 import 'package:ddoge/features/import/parsers/uestc_eams_parser.dart';
 import 'package:ddoge/features/import/parsers/urp_parser.dart';
 import 'package:ddoge/features/import/parsers/zhengfang_parser.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -114,6 +116,12 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       appBar: AppBar(
         title: const Text('从教务系统导入'),
         actions: [
+          if (_isAndroidPlatform)
+            IconButton(
+              onPressed: _isImporting ? null : _pickHtmlForPreview,
+              icon: const Icon(Icons.upload_file_outlined),
+              tooltip: '导入本地 HTML',
+            ),
           if (showWebView)
             IconButton(
               onPressed: _clearBrowserDataAndReload,
@@ -581,6 +589,9 @@ class _ImportPageState extends ConsumerState<ImportPage> {
 
     return false;
   }
+
+  bool get _isAndroidPlatform =>
+      defaultTargetPlatform == TargetPlatform.android;
 
   bool _looksLikeUestcUrl(String? url) {
     if (url == null || url.isEmpty) return false;
@@ -1982,6 +1993,307 @@ class _ImportPageState extends ConsumerState<ImportPage> {
 
   // ─── Import logic ───
 
+  Future<void> _pickHtmlForPreview() async {
+    final semester = ref.read(currentSemesterProvider).valueOrNull;
+    if (semester == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先设置学期')));
+      return;
+    }
+
+    setState(() => _isImporting = true);
+    try {
+      final selection = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['html', 'htm'],
+        allowMultiple: false,
+        withData: true,
+      );
+      if (selection == null) return;
+
+      final file = selection.files.single;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('无法读取所选 HTML 文件');
+      }
+
+      // The page is treated strictly as text. Its JavaScript is never run.
+      final parsed = UestcEamsParser().parseImportResult(
+        utf8.decode(bytes, allowMalformed: true),
+        semester.id,
+      );
+      if (parsed.courses.isEmpty) {
+        final reason = parsed.warnings.isEmpty
+            ? ''
+            : ' ${parsed.warnings.first}';
+        throw Exception('未找到可导入的课程。$reason');
+      }
+
+      final confirmed = await _showHtmlImportPreview(file.name, parsed);
+      if (confirmed != true) return;
+
+      final summary = await _replaceCourses(semester, parsed);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(summary)));
+      context.pop();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('导入失败: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _isImporting = false);
+    }
+  }
+
+  Future<bool?> _showHtmlImportPreview(
+    String fileName,
+    ImportParseResult parseResult,
+  ) {
+    final warnings = _buildImportWarnings(parseResult);
+    final courses = parseResult.courses;
+
+    return showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: FractionallySizedBox(
+          heightFactor: 0.88,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '确认导入课表',
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(sheetContext).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '识别到 ${courses.map((course) => course.name).toSet().length} 门课程，'
+                  '共 ${courses.length} 条上课记录。确认后会替换当前学期的全部课程。',
+                ),
+                if (warnings.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(sheetContext).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '请注意',
+                          style: TextStyle(
+                            color: Theme.of(
+                              sheetContext,
+                            ).colorScheme.onErrorContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        ...warnings.map(
+                          (warning) => Text(
+                            '• $warning',
+                            style: TextStyle(
+                              color: Theme.of(
+                                sheetContext,
+                              ).colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Text(
+                  '导入明细',
+                  style: Theme.of(sheetContext).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: courses.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (_, index) {
+                      final course = courses[index];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(course.name),
+                        subtitle: Text(
+                          '${_formatCourseTime(course)}\n'
+                          '${course.teacher.isEmpty ? '教师未提供' : course.teacher}'
+                          '${course.classroom.isEmpty ? '' : ' · ${course.classroom}'}',
+                        ),
+                        isThreeLine: true,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(false),
+                        child: const Text('取消'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(true),
+                        child: const Text('替换并导入'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<String> _buildImportWarnings(ImportParseResult parseResult) {
+    final warnings = <String>{...parseResult.warnings};
+    final conflictCount = _countImportConflicts(parseResult.courses);
+    if (conflictCount > 0) {
+      warnings.add('导入数据中发现 $conflictCount 组同周同节次的课程冲突。');
+    }
+    return warnings.toList(growable: false);
+  }
+
+  int _countImportConflicts(List<Course> courses) {
+    var count = 0;
+    for (var leftIndex = 0; leftIndex < courses.length; leftIndex++) {
+      final left = courses[leftIndex];
+      for (
+        var rightIndex = leftIndex + 1;
+        rightIndex < courses.length;
+        rightIndex++
+      ) {
+        final right = courses[rightIndex];
+        if (left.dayOfWeek != right.dayOfWeek ||
+            left.endSlot < right.startSlot ||
+            right.endSlot < left.startSlot) {
+          continue;
+        }
+        final startWeek = left.startWeek > right.startWeek
+            ? left.startWeek
+            : right.startWeek;
+        final endWeek = left.endWeek < right.endWeek
+            ? left.endWeek
+            : right.endWeek;
+        for (var week = startWeek; week <= endWeek; week++) {
+          if (_isActiveInWeek(left, week) && _isActiveInWeek(right, week)) {
+            count++;
+            break;
+          }
+        }
+      }
+    }
+    return count;
+  }
+
+  bool _isActiveInWeek(Course course, int week) {
+    if (week < course.startWeek || week > course.endWeek) return false;
+    return switch (course.weekType) {
+      1 => week.isOdd,
+      2 => week.isEven,
+      _ => true,
+    };
+  }
+
+  String _formatCourseTime(Course course) {
+    const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    final weekday = course.dayOfWeek >= 1 && course.dayOfWeek <= weekdays.length
+        ? weekdays[course.dayOfWeek - 1]
+        : '未知星期';
+    final weekType = switch (course.weekType) {
+      1 => '（单周）',
+      2 => '（双周）',
+      _ => '',
+    };
+    return '$weekday · 第${course.startSlot}-${course.endSlot}节 · '
+        '第${course.startWeek}-${course.endWeek}周$weekType';
+  }
+
+  Future<String> _replaceCourses(
+    Semester semester,
+    ImportParseResult parseResult,
+  ) async {
+    final parsedCourses = parseResult.courses;
+    final database = ref.read(databaseProvider);
+    final courseDao = ref.read(courseDaoProvider);
+    final timeSlotDao = ref.read(timeSlotDaoProvider);
+    final settingsStorage = ref.read(settingsStorageProvider);
+    final names = <String>{};
+    final courseColorByName = <String, int>{};
+
+    await database.transaction(() async {
+      await courseDao.deleteCoursesForSemester(semester.id);
+
+      for (final course in parsedCourses) {
+        names.add(course.name);
+        final colorIndex = courseColorByName.putIfAbsent(
+          course.name,
+          () => courseColorByName.length % 10,
+        );
+        await courseDao.upsertCourse(
+          CoursesCompanion(
+            id: drift.Value(course.id),
+            name: drift.Value(course.name),
+            teacher: drift.Value(course.teacher),
+            classroom: drift.Value(course.classroom),
+            dayOfWeek: drift.Value(course.dayOfWeek),
+            startSlot: drift.Value(course.startSlot),
+            endSlot: drift.Value(course.endSlot),
+            startWeek: drift.Value(course.startWeek),
+            endWeek: drift.Value(course.endWeek),
+            weekType: drift.Value(course.weekType),
+            colorIndex: drift.Value(colorIndex),
+            semesterId: drift.Value(semester.id),
+          ),
+        );
+      }
+    });
+
+    if (parseResult.timeSlotTemplate != null) {
+      await _applyImportedTimeSlotTemplate(
+        semester.id,
+        parseResult.timeSlotTemplate!,
+        timeSlotDao,
+        settingsStorage,
+      );
+    }
+
+    final importedTimeSlotsText = parseResult.timeSlotTemplate == null
+        ? ''
+        : '，并同步了节次模板';
+    final weekOffsetText = parseResult.normalizedWeekOffset > 0
+        ? '（周次已整体前移 ${parseResult.normalizedWeekOffset} 周）'
+        : '';
+    return '导入成功：${names.length} 门课程，共 ${parsedCourses.length} 条记录'
+        '$importedTimeSlotsText$weekOffsetText';
+  }
+
   Future<void> _startImport() async {
     final semesterAsync = ref.read(currentSemesterProvider);
     final semester = semesterAsync.valueOrNull;
@@ -2064,61 +2376,9 @@ class _ImportPageState extends ConsumerState<ImportPage> {
         throw Exception('未找到课表数据，请确保已进入查询结果页面');
       }
 
-      final database = ref.read(databaseProvider);
-      final courseDao = ref.read(courseDaoProvider);
-      final timeSlotDao = ref.read(timeSlotDaoProvider);
-      final settingsStorage = ref.read(settingsStorageProvider);
-      final names = <String>{};
-      final courseColorByName = <String, int>{};
-
-      await database.transaction(() async {
-        await courseDao.deleteCoursesForSemester(semester.id);
-
-        for (final c in parsedCourses) {
-          names.add(c.name);
-          final colorIndex = courseColorByName.putIfAbsent(
-            c.name,
-            () => courseColorByName.length % 10,
-          );
-
-          await courseDao.upsertCourse(
-            CoursesCompanion(
-              id: drift.Value(c.id),
-              name: drift.Value(c.name),
-              teacher: drift.Value(c.teacher),
-              classroom: drift.Value(c.classroom),
-              dayOfWeek: drift.Value(c.dayOfWeek),
-              startSlot: drift.Value(c.startSlot),
-              endSlot: drift.Value(c.endSlot),
-              startWeek: drift.Value(c.startWeek),
-              endWeek: drift.Value(c.endWeek),
-              weekType: drift.Value(c.weekType),
-              colorIndex: drift.Value(colorIndex),
-              semesterId: drift.Value(semester.id),
-            ),
-          );
-        }
-      });
-
-      if (parseResult.timeSlotTemplate != null) {
-        await _applyImportedTimeSlotTemplate(
-          semester.id,
-          parseResult.timeSlotTemplate!,
-          timeSlotDao,
-          settingsStorage,
-        );
-      }
+      final importSummary = await _replaceCourses(semester, parseResult);
 
       if (mounted) {
-        final importedTimeSlotsText = parseResult.timeSlotTemplate == null
-            ? ''
-            : '，并同步了节次模板';
-        final weekOffsetText = parseResult.normalizedWeekOffset > 0
-            ? '（周次已整体前移 ${parseResult.normalizedWeekOffset} 周）'
-            : '';
-        final importSummary =
-            '导入成功：${names.length} 门课程，共 ${parsedCourses.length} 条记录'
-            '$importedTimeSlotsText$weekOffsetText';
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(importSummary)));

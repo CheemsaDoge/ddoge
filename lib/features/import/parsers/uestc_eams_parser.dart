@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:html/parser.dart' as html_parser;
 import 'package:uuid/uuid.dart';
 
+import 'package:ddoge/core/constants/time_slots.dart';
 import 'package:ddoge/data/database/app_database.dart';
 import 'package:ddoge/features/import/models/import_parse_result.dart';
 
@@ -95,14 +96,25 @@ class UestcEamsParser {
     String semesterId,
   ) {
     if (activities.isEmpty) {
-      return const ImportParseResult(courses: <Course>[]);
+      return const ImportParseResult(
+        courses: <Course>[],
+        warnings: <String>['未识别到 EAMS TaskActivity 课表数据。'],
+      );
     }
 
     final uuid = const Uuid();
     final courses = <Course>[];
+    final warnings = <String>[];
+    final unsupportedActivities = <String>{};
+    final invalidActivities = <String>{};
+    final invalidDays = <String>{};
     final normalizedWeekOffset = _detectWeekShift(activities);
 
     for (final activity in activities) {
+      if (activity.displayName.trim().isEmpty) {
+        invalidActivities.add('缺少课程名称');
+        continue;
+      }
       final normalizedWeeks = normalizedWeekOffset == 0
           ? activity.activeWeeks
           : activity.activeWeeks
@@ -115,6 +127,10 @@ class UestcEamsParser {
       }
 
       activity.dayToSlots.forEach((day, daySlots) {
+        if (day < 1 || day > TimeSlotConstants.daysPerWeek) {
+          invalidDays.add(activity.displayName);
+          return;
+        }
         final sortedSlots = [...daySlots]..sort();
         if (sortedSlots.isEmpty) {
           return;
@@ -129,23 +145,9 @@ class UestcEamsParser {
             continue;
           }
 
-          courses.add(
-            _createCourse(
-              activity: activity,
-              day: day,
-              start: start,
-              end: end,
-              weeks: weeks,
-              semesterId: semesterId,
-              uuid: uuid,
-            ),
-          );
-          start = sortedSlots[index];
-          end = sortedSlots[index];
-        }
-
-        courses.add(
-          _createCourse(
+          _addCourseIfSupported(
+            courses: courses,
+            unsupportedActivities: unsupportedActivities,
             activity: activity,
             day: day,
             start: start,
@@ -153,14 +155,70 @@ class UestcEamsParser {
             weeks: weeks,
             semesterId: semesterId,
             uuid: uuid,
-          ),
+          );
+          start = sortedSlots[index];
+          end = sortedSlots[index];
+        }
+
+        _addCourseIfSupported(
+          courses: courses,
+          unsupportedActivities: unsupportedActivities,
+          activity: activity,
+          day: day,
+          start: start,
+          end: end,
+          weeks: weeks,
+          semesterId: semesterId,
+          uuid: uuid,
         );
       });
+    }
+
+    if (unsupportedActivities.isNotEmpty) {
+      warnings.add(
+        '已跳过 ${unsupportedActivities.length} 门包含第${TimeSlotConstants.maxSlotsPerDay + 1}节'
+        '及以后节次的课程：${unsupportedActivities.join('、')}。',
+      );
+    }
+    if (invalidActivities.isNotEmpty) {
+      warnings.add('已跳过 ${invalidActivities.length} 条缺少课程名称的记录。');
+    }
+    if (invalidDays.isNotEmpty) {
+      warnings.add('已跳过 ${invalidDays.length} 门星期信息无效的课程。');
     }
 
     return ImportParseResult(
       courses: courses,
       normalizedWeekOffset: normalizedWeekOffset,
+      warnings: warnings,
+    );
+  }
+
+  void _addCourseIfSupported({
+    required List<Course> courses,
+    required Set<String> unsupportedActivities,
+    required _ParsedActivity activity,
+    required int day,
+    required int start,
+    required int end,
+    required _WeekInfo weeks,
+    required String semesterId,
+    required Uuid uuid,
+  }) {
+    if (end > TimeSlotConstants.maxSlotsPerDay) {
+      unsupportedActivities.add(activity.displayName);
+      return;
+    }
+    courses.add(
+      _createCourse(
+        activity: activity,
+        day: day,
+        start: start,
+        end: end,
+        weeks: weeks,
+        semesterId: semesterId,
+        uuid: uuid,
+      ),
     );
   }
 

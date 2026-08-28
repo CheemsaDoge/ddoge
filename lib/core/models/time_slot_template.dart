@@ -56,6 +56,8 @@ class TimeSlotTemplate {
     this.source,
   });
 
+  // Keep these identifiers stable: older installations persist them in
+  // SharedPreferences. Their slot data is supplied by the current defaults.
   static const defaultTemplateId = 'builtin.default_12_slots';
   static const uestcTemplateId = 'builtin.uestc_12_slots';
 
@@ -68,13 +70,13 @@ class TimeSlotTemplate {
   static final List<TimeSlotTemplate> builtInTemplates = [
     TimeSlotTemplate(
       id: defaultTemplateId,
-      name: '标准 12 节',
+      name: '标准 11 节',
       slots: _slotsFromDefaults(),
       isBuiltin: true,
     ),
     TimeSlotTemplate(
       id: uestcTemplateId,
-      name: '电子科大 12 节',
+      name: '电子科大 11 节',
       slots: _slotsFromDefaults(),
       isBuiltin: true,
       source: 'UESTC',

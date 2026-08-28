@@ -6,9 +6,11 @@ class ImportParseResult {
     required this.courses,
     this.timeSlotTemplate,
     this.normalizedWeekOffset = 0,
+    this.warnings = const <String>[],
   });
 
   final List<Course> courses;
   final TimeSlotTemplate? timeSlotTemplate;
   final int normalizedWeekOffset;
+  final List<String> warnings;
 }

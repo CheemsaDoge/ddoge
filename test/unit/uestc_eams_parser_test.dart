@@ -81,5 +81,32 @@ void main() {
       expect(evenCourse.startWeek, 2);
       expect(evenCourse.endWeek, 6);
     });
+
+    test('warns and skips activities outside the 11-slot timetable', () {
+      const html = '''
+        <script>
+          var unitCount = 12;
+          activity = new TaskActivity("1","T1","101","晚课(A1)","1","R1","01111100000000000000000000000000000000000000000000000");
+          index = 0*unitCount+11;
+          table0.activities[index][0]=activity;
+        </script>
+      ''';
+
+      final result = parser.parseImportResult(html, semesterId);
+
+      expect(result.courses, isEmpty);
+      expect(result.warnings, hasLength(1));
+      expect(result.warnings.single, contains('第12节'));
+    });
+
+    test('returns a clear warning when no TaskActivity data exists', () {
+      final result = parser.parseImportResult(
+        '<html><body>无课表</body></html>',
+        semesterId,
+      );
+
+      expect(result.courses, isEmpty);
+      expect(result.warnings, contains('未识别到 EAMS TaskActivity 课表数据。'));
+    });
   });
 }
