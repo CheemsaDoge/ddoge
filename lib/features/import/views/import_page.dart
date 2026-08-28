@@ -64,6 +64,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36';
   static const _uestcDebugEventLimit = 30;
+  static const _localImportExtensions = <String>{'html', 'htm', 'mht', 'mhtml'};
 
   InAppWebViewController? _controller;
   bool _isLoading = true;
@@ -2006,8 +2007,9 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     setState(() => _isImporting = true);
     try {
       final selection = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['html', 'htm', 'mht', 'mhtml'],
+        // Android document providers do not consistently advertise MHT MIME
+        // types, so a custom extension filter can hide valid MHT files.
+        type: FileType.any,
         allowMultiple: false,
         withData: true,
       );
@@ -2020,7 +2022,10 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       }
 
       // The page is treated strictly as text. Its JavaScript is never run.
-      final extension = (file.extension ?? '').toLowerCase();
+      final extension = _localImportExtension(file);
+      if (!_localImportExtensions.contains(extension)) {
+        throw Exception('请选择 HTML、HTM、MHT 或 MHTML 课表文件');
+      }
       final html = extension == 'mht' || extension == 'mhtml'
           ? const MhtHtmlExtractor().extract(bytes)
           : utf8.decode(bytes, allowMalformed: true);
@@ -2050,6 +2055,15 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     } finally {
       if (mounted) setState(() => _isImporting = false);
     }
+  }
+
+  String _localImportExtension(PlatformFile file) {
+    final extension = file.extension?.trim();
+    if (extension != null && extension.isNotEmpty) {
+      return extension.toLowerCase().replaceFirst(RegExp(r'^\.'), '');
+    }
+    final dotIndex = file.name.lastIndexOf('.');
+    return dotIndex < 0 ? '' : file.name.substring(dotIndex + 1).toLowerCase();
   }
 
   Future<bool?> _showHtmlImportPreview(

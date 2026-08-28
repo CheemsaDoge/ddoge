@@ -108,5 +108,44 @@ void main() {
       expect(result.courses, isEmpty);
       expect(result.warnings, contains('未识别到 EAMS TaskActivity 课表数据。'));
     });
+
+    test('parses the rendered EAMS timetable used by saved MHT files', () {
+      const html = '''
+        <table>
+          <tr>
+            <td id="TD0_0" class="infoTitle" rowspan="2"
+              title="纪禄平 计算机组成与结构(H0801640.01);(连1-4 连6-16,品学楼C230)">
+            </td>
+            <td id="TD20_0" class="infoTitle" rowspan="3"
+              title="周云刚 大学物理实验Ⅰ(S1214710.31);(单1-9,物电学院实验室6)">
+            </td>
+          </tr>
+        </table>
+      ''';
+
+      final courses = parser.parse(html, semesterId);
+      final composition = courses
+          .where((course) => course.name == '计算机组成与结构')
+          .toList();
+
+      expect(composition, hasLength(2));
+      expect(composition[0].teacher, '纪禄平');
+      expect(composition[0].classroom, '品学楼C230');
+      expect(composition[0].dayOfWeek, 1);
+      expect(composition[0].startSlot, 1);
+      expect(composition[0].endSlot, 2);
+      expect(composition[0].startWeek, 1);
+      expect(composition[0].endWeek, 4);
+      expect(composition[1].startWeek, 6);
+      expect(composition[1].endWeek, 16);
+
+      final experiment = courses.singleWhere(
+        (course) => course.name == '大学物理实验Ⅰ',
+      );
+      expect(experiment.dayOfWeek, 2);
+      expect(experiment.startSlot, 9);
+      expect(experiment.endSlot, 11);
+      expect(experiment.weekType, 1);
+    });
   });
 }
