@@ -86,6 +86,7 @@ class _CourseEditPageState extends ConsumerState<CourseEditPage> {
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: _deleteCourse,
+            tooltip: '删除课程',
           ),
           TextButton(onPressed: _saveCourse, child: const Text('保存')),
         ],

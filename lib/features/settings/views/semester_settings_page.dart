@@ -74,10 +74,12 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
                         IconButton(
                           icon: const Icon(Icons.edit_outlined, size: 20),
                           onPressed: () => _startEdit(s),
+                          tooltip: '编辑学期',
                         ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline, size: 20),
                           onPressed: () => _deleteSemester(s.id, s.name),
+                          tooltip: '删除学期',
                         ),
                       ],
                     ),
