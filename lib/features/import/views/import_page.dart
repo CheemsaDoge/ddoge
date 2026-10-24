@@ -327,6 +327,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                       _isLoading ? Icons.close : Icons.refresh,
                       size: 18,
                     ),
+                    tooltip: _isLoading ? '停止加载' : '刷新',
                     onPressed: () async {
                       if (_isLoading) {
                         await _controller?.stopLoading();
@@ -335,7 +336,6 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                       }
                     },
                     visualDensity: VisualDensity.compact,
-                    tooltip: _isLoading ? '停止' : '刷新',
                   ),
                 ],
               ),
