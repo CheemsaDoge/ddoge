@@ -131,6 +131,7 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
                       ? () => setState(() => _totalWeeks--)
                       : null,
                   icon: const Icon(Icons.remove_circle_outline),
+                  tooltip: '减少周数',
                 ),
                 Text('$_totalWeeks', style: theme.textTheme.titleMedium),
                 IconButton(
@@ -138,6 +139,7 @@ class _SemesterSettingsPageState extends ConsumerState<SemesterSettingsPage> {
                       ? () => setState(() => _totalWeeks++)
                       : null,
                   icon: const Icon(Icons.add_circle_outline),
+                  tooltip: '增加周数',
                 ),
               ],
             ),
