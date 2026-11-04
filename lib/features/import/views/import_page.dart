@@ -566,6 +566,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                     : Icons.download,
               ),
               label: Text(_primaryActionLabel),
+              tooltip: _primaryActionLabel,
             )
           : null,
     );
