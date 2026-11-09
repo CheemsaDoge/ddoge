@@ -266,6 +266,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
               ),
               child: FloatingActionButton(
                 onPressed: () => context.push(AppRoutes.courseAdd),
+                tooltip: '添加课程',
                 child: const Icon(Icons.add),
               ),
             )
